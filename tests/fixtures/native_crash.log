@@ -1,0 +1,4 @@
+1763561100.000  4321  4400 F libc    : Fatal signal 11 (SIGSEGV), code 1 (SEGV_MAPERR), fault addr 0x0 in tid 4400 (UnityMain), pid 4321 (superfusion.gfl)
+1763561100.300  5000  5000 F DEBUG   : *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+1763561100.301  5000  5000 F DEBUG   : pid: 4321, tid: 4400, name: UnityMain  >>> superfusion.gfl <<<
+1763561100.320  4321  4400 E CRASH   : signal 11 (SIGSEGV), code 1 (SEGV_MAPERR), fault addr 0000000000000000

@@ -1,0 +1,3 @@
+1763561200.000   612   700 E ActivityManager: ANR in superfusion.gfl (superfusion.gfl/com.unity3d.player.UnityPlayerActivity)
+1763561200.001   612   700 E ActivityManager: PID: 4321
+1763561200.002   612   700 E ActivityManager: Reason: Input dispatching timed out

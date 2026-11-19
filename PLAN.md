@@ -76,6 +76,46 @@ Touches are recorded from `adb shell getevent` with timestamps and replayed with
 | 5 | iOS (via a Mac, logs + video, no replay) and PC games (screen capture) | |
 | 6 | Demo video, README numbers, release | |
 
+## Phase 1 design (the useful core)
+
+`lens watch <package>` runs three adb streams into time-stamped ring buffers, watches the log for
+crashes, listens for the F8 mark, and writes one folder per bug.
+
+| Stream | Command | Buffer |
+|---|---|---|
+| Video | `adb exec-out screenrecord --output-format=h264 -` (restarted every 170 s, the tool's 3-minute cap) → ffmpeg re-encodes with a keyframe every second into 2 s `.ts` segments | last 20 segments (40 s) on disk |
+| Log | `adb logcat -v epoch` | last 60 s in memory |
+| Touches | `adb shell getevent -lt <touchscreen>` → down / move / up in screen pixels | last 60 s in memory |
+
+- **Clock:** everything is stamped in host time. Device log times are converted with an offset
+  measured at start (`adb shell date`).
+- **Crash detector:** lines from the game's process matching `FATAL EXCEPTION`, `Fatal signal`,
+  native crash and tombstone headers, Unity crash lines, `ANR in <package>`, and ActivityManager's
+  `Process <package> … has died`. Lines within 3 s of each other are one bug.
+- **Manual mark:** F8 anywhere (pynput global hotkey), or `m` + Enter in the terminal. Then it asks
+  for a one-line note.
+- **On a catch or mark:** wait 5 s for the "after", then write
+  `bugs/<time>_<kind>/` with `clip.mp4` (-20 s/+5 s, cut from the segments), `logcat.txt` (60 s
+  before + 5 s after), `touches.jsonl`, `meta.json` (device, Android version, game version, kind,
+  matched lines, note), and `report.md` (a filled template; AI writing comes in phase 3).
+- **Tests (no phone needed):** log parsing and crash grouping on real crash dumps (Java, native,
+  Unity, ANR), getevent parsing and scaling, ring-buffer trimming, picking segments for a time
+  window, and bug folder writing.
+- **Done when:** with a phone plugged in, force-stopping the game with a crash and pressing F8 each
+  produce a bug folder with a playable clip covering the moment.
+
+## Skills used on this project
+
+| Skill | Where |
+|---|---|
+| ponytail | every coding task: smallest complete change, one check per new logic |
+| design-md-planner | DESIGN.md (Flight Recorder), linted clean with the official CLI |
+| ui-ux-pro-max | UX rules for the dashboard (focus, reduced motion, live regions, loading), phase 3 |
+| impeccable / frontend-design | building and polishing the dashboard, phase 3 |
+| engineering:testing-strategy | detector fixtures and accuracy numbers, phases 2–3 |
+| code-review | before each push |
+| bang-motion / hyperframes | the README demo video, phase 6 |
+
 ## Rules
 
 - $0 to run; on-device models only. Anything paid is optional and off by default.

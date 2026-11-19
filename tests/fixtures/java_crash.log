@@ -1,0 +1,7 @@
+1763561000.100  4321  4321 I Unity   : Loading scene Field
+1763561001.000  1111  1111 E AndroidRuntime: FATAL EXCEPTION: main
+1763561001.001  4321  4321 E AndroidRuntime: FATAL EXCEPTION: main
+1763561001.002  4321  4321 E AndroidRuntime: Process: superfusion.gfl, PID: 4321
+1763561001.003  4321  4321 E AndroidRuntime: java.lang.NullPointerException: Attempt to invoke virtual method 'int Team.getScore()' on a null object reference
+1763561001.004  4321  4321 E AndroidRuntime: 	at com.superfusion.gfl.Match.endQuarter(Match.java:212)
+1763561001.400   612   640 I ActivityManager: Process superfusion.gfl (pid 4321) has died: fg  TOP
