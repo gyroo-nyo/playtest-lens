@@ -6,7 +6,7 @@ import time
 
 def run(serial, *args, timeout=15):
     cmd = ['adb', *(['-s', serial] if serial else []), *args]
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout
+    return subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout).stdout
 
 
 def shell(serial, command):
@@ -15,7 +15,7 @@ def shell(serial, command):
 
 def devices():
     """[(serial, model)] of connected, authorised devices."""
-    out = subprocess.run(['adb', 'devices', '-l'], capture_output=True, text=True).stdout
+    out = subprocess.run(['adb', 'devices', '-l'], stdin=subprocess.DEVNULL, capture_output=True, text=True).stdout
     found = []
     for line in out.splitlines()[1:]:
         parts = line.split()

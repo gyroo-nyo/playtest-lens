@@ -94,10 +94,13 @@ crashes, listens for the F8 mark, and writes one folder per bug.
   `Process <package> … has died`. Lines within 3 s of each other are one bug.
 - **Manual mark:** F8 anywhere (pynput global hotkey), or `m` + Enter in the terminal. Then it asks
   for a one-line note.
-- **On a catch or mark:** wait 5 s for the "after", then write
-  `bugs/<time>_<kind>/` with `clip.mp4` (-20 s/+5 s, cut from the segments), `logcat.txt` (60 s
-  before + 5 s after), `touches.jsonl`, `meta.json` (device, Android version, game version, kind,
-  matched lines, note), and `report.md` (a filled template; AI writing comes in phase 3).
+- **On a catch or mark:** wait for the "after" (3 s, plus the segment still being written), then write
+  `bugs/<time>_<kind>/` with `clip.mp4` (-12 s/+3 s, cut from the segments, with Android's "Show taps" dots), `step1.jpg…` (the frame at each of the last 5 taps with a red box on the spot), `logcat.txt` (60 s
+  before + 3 s after), `touches.jsonl`, `meta.json` (device, Android version, game version, kind,
+  matched lines, note), and `report.md` (what happened, the clip, picture steps; AI-written steps come in phase 3).
+- **Robustness:** adb streams restart after the phone drops off USB; the recorder waits for an
+  authorized phone and restarts after a rotation; no subprocess reads the terminal, so typed notes
+  reach Lens.
 - **Tests (no phone needed):** log parsing and crash grouping on real crash dumps (Java, native,
   Unity, ANR), getevent parsing and scaling, ring-buffer trimming, picking segments for a time
   window, and bug folder writing.

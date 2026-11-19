@@ -16,9 +16,9 @@ python3 -m venv .venv && .venv/bin/pip install -e .
 ```
 
 - A crash or ANR is saved automatically.
-- Saw something the detectors missed? Press **F8** (fn+F8 on a Mac; the terminal needs Accessibility permission), or type `m <what happened>` and Enter. The clip starts 20 seconds *before* you pressed.
+- Saw something the detectors missed? Press **F8** (fn+F8 on a Mac; the terminal needs Accessibility permission), or type `m <what happened>` and Enter. The 15-second clip starts 12 seconds *before* you pressed.
 
-Each bug lands in `bugs/<time>_<kind>/`: `clip.mp4`, `report.md`, `logcat.txt`, `touches.jsonl`, `meta.json`.
+Each bug lands in `bugs/<time>_<kind>/`: `clip.mp4` (15 s, with your taps shown), `step1.jpg…` (where you tapped), `report.md`, `logcat.txt`, `touches.jsonl`, `meta.json`.
 
 ## Develop
 

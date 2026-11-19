@@ -87,19 +87,42 @@ def test_bug_folder_and_report(tmp_path):
     [ev] = run('java_crash.log')
     meta = {'model': 'Pixel 7', 'android': '15', 'package': PKG, 'game_version': '1.4.2', 'serial': 'X'}
     touches = [(1, {'t': 1, 'type': 'down', 'x': .5, 'y': .25}), (2, {'t': 2, 'type': 'up', 'x': .5, 'y': .25})]
-    folder = bugs.write(tmp_path, ev, meta, [(1, 'log line')], touches, lambda out: False)
+    folder = bugs.write(tmp_path, ev, meta, [(1, 'log line')], touches, lambda out: False, t0=0)
     assert {p.name for p in folder.iterdir()} == {'logcat.txt', 'touches.jsonl', 'meta.json', 'report.md'}
     m = json.loads((folder / 'meta.json').read_text())
     assert m['kind'] == 'crash' and m['clip'] is False and m['game_version'] == '1.4.2'
     report = (folder / 'report.md').read_text()
-    assert '[Crash] java.lang.NullPointerException' in report and 'Tap at 50% across, 25% down' in report
+    assert '[Crash] java.lang.NullPointerException' in report and 'Tap the spot in the red box' in report and '% across' not in report
 
 
 def test_manual_note_updates_report(tmp_path):
     ev = Event('manual', 1763561000.0)
     meta = {'model': 'Pixel 7', 'android': '15', 'package': PKG, 'game_version': '1.4.2', 'serial': 'X'}
     folder = bugs.write(tmp_path, ev, meta, [], [], lambda out: False)
-    assert '[Bug] Marked by tester' in (folder / 'report.md').read_text()
+    first = (folder / 'report.md').read_text()
+    assert '[Bug] Marked by tester' in first
+    assert 'stopped responding' not in first      # a manual mark isn't a freeze
     ev.note = 'Ball passes through the goalpost'
     bugs.update(folder, ev, meta, [])
     assert '[Bug] Ball passes through the goalpost' in (folder / 'report.md').read_text()
+
+
+def test_cut_survives_pruned_segments(tmp_path):
+    """A segment deleted by pruning mid-cut is skipped, not fatal; no segments at all means no clip."""
+    from lens import video
+    assert video.cut([], 0, 1, tmp_path / 'a.mp4') is False
+    assert video.cut([(str(tmp_path / 'gone.ts'), 0.0, 2.0)], 0, 1, tmp_path / 'b.mp4') is False
+
+
+def test_report_steps_are_pictures_not_percentages(tmp_path):
+    ev = Event('manual', 1000.0, note='Ball goes through the player')
+    meta = {'model': 'Infinix X6870', 'android': '16', 'package': PKG, 'game_version': '12.7', 'serial': 'X'}
+    taps = [(985.0, {'type': 'down', 'x': 0.1, 'y': 0.1}),   # before the clip: left out
+            (990.0, {'type': 'down', 'x': 0.66, 'y': 0.76}), (990.1, {'type': 'up', 'x': 0.66, 'y': 0.76}),
+            (995.5, {'type': 'down', 'x': 0.72, 'y': 0.21})]
+    (tmp_path / 'step1.jpg').write_bytes(b'x')
+    text = bugs.report(ev, meta, taps, tmp_path, t0=988.0, clip_seconds=15)
+    assert '% across' not in text
+    assert '1. Tap the spot in the red box (10 s before the bug)' in text and '![step 1](step1.jpg)' in text
+    assert '2. Tap the spot in the red box (4 s before the bug)' in text and 'step2.jpg' not in text
+    assert '15 s leading up to the bug' in text
