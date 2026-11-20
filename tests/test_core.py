@@ -331,3 +331,44 @@ def test_magenta_missing_texture():
     det = glitch.Detector()
     det.check(1.0, pink * n)
     assert det.check(5.0, pink * n) is None            # one report, not one every 3 s
+
+
+def test_dashboard_bug_actions(tmp_path):
+    meta = {'model': 'X', 'android': '16', 'package': PKG, 'game_version': '1', 'serial': 'X'}
+    folder = bugs.write(tmp_path, Event('manual', 1763561000.0, note='Ball clips through the post'), meta, [], [], lambda out: False)
+    bug = folder.name
+    [row] = bugs.listing(tmp_path)['bugs']
+    assert row['id'] == bug and row['title'] == 'Ball clips through the post' and row['clip'] is False
+    for bad in ['../etc', '_false_alarms', '.', '', 'a/b']:
+        assert bugs.find(tmp_path, bad) is None
+    assert bugs.save_report(tmp_path, bug, '# my words')
+    bugs.update(folder, Event('manual', 1763561000.0, note='new note'), meta, [])
+    assert (folder / 'report.md').read_text() == '# my words'          # an edit survives a rebuild
+    assert bugs.dismiss(tmp_path, bug) and bugs.listing(tmp_path)['bugs'] == []
+    assert [r['id'] for r in bugs.listing(tmp_path)['false_alarms']] == [bug]
+    assert bugs.restore(tmp_path, bug) and bugs.listing(tmp_path)['bugs'][0]['id'] == bug
+
+
+def test_ai_draft_goes_into_the_report():
+    ev = Event('manual', 1000.0, note='error')
+    meta = {'model': 'X', 'android': '16', 'package': PKG, 'game_version': '1', 'serial': 'X'}
+    ai = {'title': 'Player passes through the goalpost on a field goal', 'severity': 'minor',
+          'steps': ['Start a game', 'Kick a field goal from the 30'], 'actual': 'The ball passes through the post.',
+          'expected': 'The ball bounces off the post.'}
+    text = bugs.report(ev, meta, [], None, t0=988.0, clip_seconds=15, ai=ai)
+    assert text.startswith('# [Bug] Player passes through the goalpost on a field goal')
+    assert '## Steps to reproduce\n1. Start a game\n2. Kick a field goal from the 30' in text
+    assert 'The ball bounces off the post.' in text and '**Severity (suggested):** minor' in text
+
+
+def test_only_local_models_write_reports(monkeypatch):
+    from lens import writer
+    import io
+    class R(io.BytesIO):
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+    tags = {'models': [{'name': 'gpt-oss:120b-cloud'}, {'name': 'qwen2.5-coder:7b'}, {'name': 'qwen3:8b'}]}
+    monkeypatch.setattr(writer.urllib.request, 'urlopen', lambda *a, **k: R(json.dumps(tags).encode()))
+    assert writer.model() == 'qwen3:8b' and writer.models() == ['qwen3:8b', 'qwen2.5-coder:7b']
+    tags['models'] = [{'name': 'deepseek-v3.1:671b-cloud'}]
+    assert writer.model() is None

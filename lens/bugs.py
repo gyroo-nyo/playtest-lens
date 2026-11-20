@@ -47,7 +47,7 @@ def did_lines(did, bug_at, last=8):
     return '\n'.join(out)
 
 
-def report(ev, meta, touches, folder=None, t0=None, clip_seconds=None, desc=None):
+def report(ev, meta, touches, folder=None, t0=None, clip_seconds=None, desc=None, ai=None):
     """Markdown report. desc: describe.describe()'s {'did', 'summary', 'situation'} (button names
     read off the screen); without it the taps are named by where they were."""
     folder = Path(folder) if folder else None
@@ -74,7 +74,15 @@ def report(ev, meta, touches, folder=None, t0=None, clip_seconds=None, desc=None
         actual = ev.note or (f'The game {"crashed" if ev.kind == "crash" else "stopped responding"}: `{title(ev)}`')
         expected = 'The game keeps running normally.'
     length = f'{clip_seconds:.0f} s' if clip_seconds else 'the moments'
-    return f"""# [{KIND_LABEL[ev.kind]}] {title(ev)}
+    heading = title(ev)
+    repro = ''
+    if ai:      # a local model's draft (writer.py): its words for title, actual, expected and steps
+        heading, actual, expected = ai['title'], ai.get('actual') or actual, ai.get('expected') or expected
+        if ai.get('steps'):
+            repro = '## Steps to reproduce\n' + '\n'.join(f'{i}. {st}' for i, st in enumerate(ai['steps'], 1)) + '\n\n'
+        if ai.get('severity'):
+            actual += f"\n\n**Severity (suggested):** {ai['severity']}"
+    return f"""# [{KIND_LABEL[ev.kind]}] {heading}
 
 | | |
 |---|---|
@@ -90,7 +98,7 @@ def report(ev, meta, touches, folder=None, t0=None, clip_seconds=None, desc=None
 ## Expected
 {expected}
 
-## What the tester did ({length} before)
+{repro}## What the tester did ({length} before)
 {steps}
 
 ## Attachments
@@ -128,7 +136,10 @@ def update(folder, ev, meta, touches, has_clip=True, t0=None, clip_seconds=None)
                                                   'clip_start': t0, 'clip_seconds': clip_seconds}, indent=2))
     saved = folder / 'describe.json'
     desc = json.loads(saved.read_text()) if saved.exists() else None
-    (folder / 'report.md').write_text(report(ev, meta, touches, folder, t0, clip_seconds, desc))
+    drafted = folder / 'ai.json'
+    ai = json.loads(drafted.read_text()) if drafted.exists() else None
+    if not (folder / 'report.edited.md').exists():       # never overwrite what the tester wrote
+        (folder / 'report.md').write_text(report(ev, meta, touches, folder, t0, clip_seconds, desc, ai))
 
 
 def load(folder):
@@ -157,3 +168,89 @@ def rebuild(folder):
         if desc:
             (folder / 'describe.json').write_text(json.dumps(desc))
     update(folder, ev, meta, touches, has_clip, t0, length)
+
+
+FALSE = '_false_alarms'
+
+
+def listing(root):
+    """{'bugs': [...], 'false_alarms': [...]}, newest first: what the dashboard's feed shows."""
+    root = Path(root)
+
+    def row(folder):
+        try:
+            m = json.loads((folder / 'meta.json').read_text())
+        except (OSError, ValueError):
+            return None
+        d = folder / 'describe.json'
+        desc = json.loads(d.read_text()) if d.exists() else {}
+        return {'id': folder.name, 'kind': m.get('kind', 'manual'), 'time': m.get('time', ''), 'title': m.get('title', ''),
+                'note': m.get('note') or '', 'clip': (folder / 'clip.mp4').exists(), 'full': (folder / 'full.mp4').exists(),
+                'clip_seconds': m.get('clip_seconds'), 'situation': desc.get('situation', ''), 'summary': desc.get('summary', '')}
+
+    def rows(where):
+        found = [row(f) for f in where.iterdir() if f.is_dir() and not f.name.startswith(('_', '.'))] if where.exists() else []
+        return sorted((r for r in found if r), key=lambda r: r['id'], reverse=True)
+    return {'bugs': rows(root), 'false_alarms': rows(root / FALSE)}
+
+
+def find(root, bug_id):
+    """The folder for a bug id, in the feed or among false alarms; None for anything else (no ../)."""
+    root = Path(root).resolve()
+    if not bug_id or '/' in bug_id or bug_id.startswith(('.', '_')):
+        return None
+    for where in (root, root / FALSE):
+        folder = (where / bug_id).resolve()
+        if folder.parent == where.resolve() and (folder / 'meta.json').exists():
+            return folder
+    return None
+
+
+def dismiss(root, bug_id):
+    """A wrong catch: moved (not deleted) to _false_alarms, where it can tune the detectors."""
+    folder = find(root, bug_id)
+    if not folder or folder.parent.name == FALSE:
+        return False
+    dest = Path(root) / FALSE / bug_id
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    folder.rename(dest)
+    return True
+
+
+def restore(root, bug_id):
+    folder = find(root, bug_id)
+    if not folder or folder.parent.name != FALSE:
+        return False
+    folder.rename(Path(root) / bug_id)
+    return True
+
+
+def save_report(root, bug_id, text):
+    """The tester's edited report.md. Rebuilding keeps it in report.edited.md, never overwritten."""
+    folder = find(root, bug_id)
+    if not folder:
+        return False
+    (folder / 'report.md').write_text(text)
+    (folder / 'report.edited.md').write_text(text)
+    return True
+
+
+def write_with_ai(root, bug_id):
+    """Asks the local model for a draft and rewrites report.md with it. Returns the draft; {'error': 'note'}
+    when a manual mark's note is too short to rewrite; None when no local model answers."""
+    from . import writer
+    folder = find(root, bug_id)
+    if not folder:
+        return None
+    ev, meta, touches, m = load(folder)
+    if ev.kind == 'manual' and len(ev.note.split()) < 3:
+        return {'error': 'note'}      # "error" isn't enough to go on: the model would make the bug up
+    d = folder / 'describe.json'
+    desc = json.loads(d.read_text()) if d.exists() else None
+    ai = writer.draft(writer.facts(KIND_LABEL[ev.kind], title(ev), ev.note, meta, desc, ev.lines))
+    if not ai:
+        return None
+    (folder / 'ai.json').write_text(json.dumps(ai, indent=2))
+    (folder / 'report.edited.md').unlink(missing_ok=True)   # asked for a new draft: replace the old text
+    update(folder, ev, meta, touches, (folder / 'clip.mp4').exists(), m.get('clip_start'), m.get('clip_seconds'))
+    return ai
