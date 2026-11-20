@@ -1,5 +1,6 @@
 """`lens devices` and `lens watch <package>`."""
 import argparse
+import json
 import subprocess
 import sys
 import tempfile
@@ -7,7 +8,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import adb, bugs, freeze, glitch, lag, logcat, text, ui, video
+from . import adb, bugs, freeze, glitch, lag, logcat, marks, text, ui, video
 from .logcat import Event
 from .ring import Ring, segments_for
 from .touches import Tracker
@@ -54,10 +55,12 @@ class stream:
 
 def cmd_watch(a):
     serial, model = pick_device()
+    if Path(a.out).resolve() == BUGS:
+        remember_package(a.package)
     s = ['-s', serial]
     meta = adb.info(serial, a.package)
     offset = adb.clock_offset(serial)
-    print(f'Watching {a.package} {meta["game_version"]} on {model}. Mark a bug: {a.hotkey.upper()} or type "m <note>" + Enter. Wrong catch? "x" + Enter. Ctrl+C to stop.')
+    print(f'Watching {a.package} {meta["game_version"]} on {model}. Mark a bug: Enter (or {a.hotkey.upper()}), then type what went wrong whenever you\'re ready. Wrong catch? "x" + Enter. Ctrl+C to stop.')
 
     logs, touches, rates = Ring(60), Ring(60), Ring(60)
     live = ui.Live(a.package, meta['game_version'], model, None)   # what the dashboard shows; mark is set below
@@ -74,7 +77,6 @@ def cmd_watch(a):
 
     rec = video.Recorder(serial, tempfile.mkdtemp(prefix='lens-video-'), on_frame=on_frame)
     rec.start()
-    last_mark = {'folder': None, 'ev': None, 't0': None}
     last_auto = {'folder': None}
 
     def capture(ev):
@@ -87,10 +89,10 @@ def cmd_watch(a):
         if ev.kind != 'manual':
             last_auto['folder'] = folder
         if ev.kind == 'manual':
-            last_mark.update(folder=folder, ev=ev, touches=tw, t0=t0)
+            marked.saved(ev, folder, tw, t0)
             f0 = ev.ts - FULL
             video.cut(segments_for(rec.segments(), f0, t1), f0, t1, folder / 'full.mp4', rates.window(f0 - 5, t1))
-            bugs.update(folder, ev, meta, tw, True, t0, BEFORE + AFTER)   # lists full.mp4
+            bugs.update(folder, ev, meta, tw, True, t0, BEFORE + AFTER)   # lists full.mp4, and a comment typed meanwhile
         print(f'\n● {ev.kind.upper()} saved: {folder}', flush=True)
 
     def catch(ev):
@@ -117,16 +119,34 @@ def cmd_watch(a):
             print(f'\n● {ev.kind.upper()} caught: {bugs.title(ev)}', flush=True)
             catch(ev)
 
+    def rewrite(folder, ev, tw, t0):
+        bugs.update(folder, ev, meta, tw, True, t0, BEFORE + AFTER)
+
+    marked = marks.Marks(catch, rewrite)
+
     def mark(note=''):
-        print(f'\n● MARKED: {note}' if note else '\n● MARKED. Type a one-line note and press Enter (or just Enter).', flush=True)
-        catch(Event('manual', time.time(), note=note))
+        ev = marked.mark(note)
+        when = time.strftime('%H:%M:%S', time.localtime(ev.ts))
+        print(f'\n● MARKED {when}: {note}' if note else
+              f'\n● MARKED {when}. Type what went wrong + Enter whenever you\'re ready (Enter alone marks another).', flush=True)
+
+    def add_note(text):
+        done = marked.note(text)
+        if done == 'added':
+            print(f'  comment added to {marked.latest["folder"]}', flush=True)
+        elif done == 'kept':
+            print('  comment kept: it goes in the report as soon as the clip is saved', flush=True)
+        else:
+            print(f'\n● MARKED {time.strftime("%H:%M:%S")}: {text}', flush=True)
 
     # The dashboard: the live phone, the bug feed, clips and reports, on this Mac only.
-    live.mark = mark
+    live.mark, live.note, live.marks = mark, add_note, marked
     if not a.no_ui:
         try:
             _, url = ui.serve(a.out, live, a.port)
             print(f'Dashboard: {url}', flush=True)
+            if sys.platform == 'darwin' and not a.no_open:
+                subprocess.run(['open', url], stdin=subprocess.DEVNULL)
         except OSError:
             print(f'Dashboard off: port {a.port} is in use (another Lens running?). Try --port 8738.', flush=True)
 
@@ -177,12 +197,12 @@ def cmd_watch(a):
                     print(f'  moved to {dest} (false alarm)', flush=True)
                 else:
                     print('  nothing to dismiss', flush=True)
-            elif line == 'm' or line.startswith('m '):
+            elif line == '' or line == 'm':
+                mark()                               # Enter: mark now, comment later
+            elif line.startswith('m '):
                 mark(line[2:].strip())
-            elif line and last_mark['ev'] and not last_mark['ev'].note:
-                last_mark['ev'].note = line
-                bugs.update(last_mark['folder'], last_mark['ev'], meta, last_mark['touches'], True, last_mark['t0'], BEFORE + AFTER)
-                print(f'  note added to {last_mark["folder"]}', flush=True)
+            else:
+                add_note(line)
     threading.Thread(target=stdin_loop, daemon=True).start()
 
     def read_screen():
@@ -250,19 +270,45 @@ def cmd_ui(a):
         server.shutdown()
 
 
+BUGS = Path(__file__).resolve().parent.parent / 'bugs'     # one bugs folder, whichever folder you start from
+COMMANDS = {'devices', 'watch', 'ui', '-h', '--help'}
+
+
+def simple(argv):
+    """`lens` alone watches the last game; `lens <package>` watches that one."""
+    if not argv:
+        package = ui.settings(BUGS).get('package')
+        if not package:
+            sys.exit('Which game? Run: lens <package>, e.g. lens superfusion.gfl (next time just: lens)')
+        return ['watch', package]
+    if argv[0] not in COMMANDS and '.' in argv[0] and not argv[0].startswith('-'):
+        return ['watch', *argv]
+    return argv
+
+
+def remember_package(package):
+    s = ui.settings(BUGS)
+    if s.get('package') != package:
+        BUGS.mkdir(parents=True, exist_ok=True)
+        ui.settings_path(BUGS).write_text(json.dumps({**s, 'package': package}, indent=2))
+
+
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog='lens', description='A dashcam and bug reporter for game testers.')
+    argv = simple(sys.argv[1:] if argv is None else argv)
+    ap = argparse.ArgumentParser(prog='lens', description='A dashcam and bug reporter for game testers. '
+                                 'Just run `lens` (the last game) or `lens <package>`.')
     sub = ap.add_subparsers(dest='cmd', required=True)
     sub.add_parser('devices', help='list connected phones').set_defaults(fn=cmd_devices)
     w = sub.add_parser('watch', help='record a game and catch bugs')
     w.add_argument('package', help='the game package, e.g. com.example.game')
-    w.add_argument('--out', default='bugs', help='where bug folders go (default: ./bugs)')
+    w.add_argument('--out', default=str(BUGS), help=f'where bug folders go (default: {BUGS})')
     w.add_argument('--hotkey', default='<f8>', help='mark hotkey in pynput format (default: <f8>)')
     w.add_argument('--port', type=int, default=ui.PORT, help=f'dashboard port (default: {ui.PORT})')
     w.add_argument('--no-ui', action='store_true', help="don't start the dashboard")
+    w.add_argument('--no-open', action='store_true', help="don't open the dashboard in the browser")
     w.set_defaults(fn=cmd_watch)
     u = sub.add_parser('ui', help='open the dashboard on saved bugs (no phone needed)')
-    u.add_argument('--out', default='bugs', help='the bugs folder (default: ./bugs)')
+    u.add_argument('--out', default=str(BUGS), help=f'the bugs folder (default: {BUGS})')
     u.add_argument('--port', type=int, default=ui.PORT, help=f'port (default: {ui.PORT})')
     u.set_defaults(fn=cmd_ui)
     a = ap.parse_args(argv)

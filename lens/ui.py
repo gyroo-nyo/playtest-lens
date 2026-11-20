@@ -33,12 +33,17 @@ class Live:
         self.frame_ts = 0.0
         self.connected = True
         self.caught = []           # (ts, kind, title) of this session's catches, newest last
+        self.note = None           # add_note(text): the comment for the latest mark
+        self.marks = None          # marks.Marks: which mark is waiting for a comment
 
     def state(self):
         now = time.time()
         return {'package': self.package, 'version': self.version, 'model': self.model, 'connected': self.connected,
                 'fps': self.fps if now - self.fps_ts < 3 else None, 'recording_for': round(now - self.started),
-                'frame_ts': self.frame_ts, 'caught': self.caught[-20:]}
+                'frame_ts': self.frame_ts, 'caught': self.caught[-20:], 'waiting_note': self.waiting_note()}
+
+    def waiting_note(self):
+        return self.marks.waiting() if self.marks else None
 
 
 def settings_path(root):
@@ -184,6 +189,14 @@ class Handler(BaseHTTPRequestHandler):
             if not self.live:
                 return self.send(409, {'error': 'Not recording. Start `lens watch <package>` to mark bugs.'})
             self.live.mark(str(body.get('note', ''))[:300])
+            return self.send(200, {'ok': True})
+        if path == '/api/note':
+            if not self.live or not self.live.note:
+                return self.send(409, {'error': 'Not recording.'})
+            text = str(body.get('text', '')).strip()[:300]
+            if not text:
+                return self.send(400, {'error': 'Write what went wrong first.'})
+            self.live.note(text)
             return self.send(200, {'ok': True})
         if path == '/api/settings':
             repo = str(body.get('github_repo', '')).strip()

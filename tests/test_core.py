@@ -417,3 +417,32 @@ def test_dashboard_server(tmp_path):
         assert json.loads(get('/api/state')[2])['false_alarms'][0]['id'] == folder.name
     finally:
         server.shutdown()
+
+
+def test_enter_marks_now_and_the_comment_comes_later():
+    from lens import marks
+    caught, rewrites = [], []
+    m = marks.Marks(caught.append, lambda folder, ev, tw, t0: rewrites.append((folder, ev.note)))
+    first = m.mark(ts=100.0)                                   # Enter
+    assert m.waiting() and m.note('ball went through the post') == 'kept'   # typed while the clip is cut
+    assert first.note == 'ball went through the post' and not m.waiting()
+    m.saved(first, 'bugs/a', [], 88.0)                        # the folder is written with the comment
+    assert rewrites == []
+    second = m.mark(ts=200.0)                                  # Enter again: another mark
+    m.saved(second, 'bugs/b', [], 188.0)
+    assert m.note('kicker froze mid-kick') == 'added' and rewrites == [('bugs/b', 'kicker froze mid-kick')]
+    assert m.note('the crowd flickers') == 'new' and len(caught) == 3 and caught[2].note == 'the crowd flickers'
+    m.saved(first, 'bugs/a', [], 88.0)                        # an old mark finishing late doesn't steal the latest
+    assert m.latest['ev'] is caught[2]
+
+
+def test_simple_command(monkeypatch, tmp_path):
+    from lens import cli
+    monkeypatch.setattr(cli, 'BUGS', tmp_path)
+    assert cli.simple(['superfusion.gfl']) == ['watch', 'superfusion.gfl']
+    assert cli.simple(['ui']) == ['ui'] and cli.simple(['watch', 'a.b', '--no-ui']) == ['watch', 'a.b', '--no-ui']
+    import pytest
+    with pytest.raises(SystemExit):
+        cli.simple([])                                            # no game yet: says how to start
+    cli.remember_package('superfusion.gfl')
+    assert cli.simple([]) == ['watch', 'superfusion.gfl']
