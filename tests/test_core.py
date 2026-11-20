@@ -278,6 +278,6 @@ def test_fps_meter_timeline():
     t0 = 100.0
     steps = meter.timeline([(99.5, 47.2), (101.0, 46.8), (102.0, 15.3)], t0, t0 + 8)
     assert [meter.label(f) for _, f in steps] == ['47 FPS', '15 FPS', '-- FPS']   # 46.8 rounds to 47: no change
-    assert steps[1][0] == 2.0 and steps[2][0] == 4.5    # "--" once readings stop for 2.5 s
+    assert steps[1][0] == 2.0 and steps[2][0] == 5.0    # "--" once the last reading is over 2.5 s old
     assert meter.color(15) == (240, 70, 60) and meter.color(None) == (150, 150, 150)
     assert meter.ppm('47 FPS', (0, 0, 0)).startswith(b'P6 ')
