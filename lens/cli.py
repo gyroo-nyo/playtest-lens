@@ -7,7 +7,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import adb, bugs, freeze, logcat, video
+from . import adb, bugs, freeze, lag, logcat, video
 from .logcat import Event
 from .ring import Ring, segments_for
 from .touches import Tracker
@@ -63,6 +63,7 @@ def cmd_watch(a):
     pids = {'set': adb.pids(serial, a.package)}
     detector = logcat.Detector(a.package)
     seen = freeze.Detector()
+    slow = lag.Detector()
 
     def on_frame(ts, data):
         ev = seen.frame(ts, data)
@@ -99,9 +100,12 @@ def cmd_watch(a):
         if not e:
             return
         logs.add(e.ts + offset, e.raw)
-        fps = freeze.game_fps(e.msg, a.package)
-        if fps is not None:
-            seen.drawing(e.ts + offset, fps)
+        frames = freeze.game_frames(e.msg, a.package)
+        if frames:
+            seen.drawing(e.ts + offset, frames[0])
+            if (dropped := slow.drawing(e.ts + offset, *frames)):
+                print(f'\n● LAG caught: {bugs.title(dropped)}', flush=True)
+                catch(dropped)
         ev = detector.feed(e, e.ts + offset, pids['set'])
         if ev:
             print(f'\n● {ev.kind.upper()} caught: {bugs.title(ev)}', flush=True)

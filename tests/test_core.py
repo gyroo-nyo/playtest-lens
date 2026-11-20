@@ -218,3 +218,35 @@ def test_rotation_from_window_manager():
     assert adb.parse_rotation('  mCurrentRotation=ROTATION_270 mLastOrientation=0') == 3
     assert adb.parse_rotation('DisplayContent{...} mRotation=1 mAltOrientation=false') == 1
     assert adb.parse_rotation('nothing here') is None
+
+
+def feed_fps(readings):
+    """readings: [(fps, longest frame ms)], one a second."""
+    from lens import lag
+    det = lag.Detector()
+    return [ev for t, (f, m) in enumerate(readings) if (ev := det.drawing(float(t), f, m))]
+
+
+SMOOTH = (47, 34)
+
+
+def test_lag_on_slow_stuttering_frames():
+    # 23:04:45 on the Infinix: 7.65 fps with a 3.2 s frame, then 10.8 fps with 766 ms
+    [ev] = feed_fps([SMOOTH, (7.65, 3211), (10.83, 766), (25.65, 664), SMOOTH])
+    assert ev.kind == 'lag' and ev.ts == 1.0 and '8 fps' in ev.lines[0] and '3.2 s' in ev.lines[0]
+
+
+def test_play_calling_screen_at_a_steady_15_fps_is_not_lag():
+    assert feed_fps([SMOOTH] + [(15.26, 117)] * 14 + [(15.27, 133), SMOOTH]) == []
+
+
+def test_one_slow_second_is_not_lag():
+    assert feed_fps([SMOOTH, (24, 400), SMOOTH, SMOOTH]) == []
+
+
+def test_zero_fps_is_a_pause_not_lag():
+    assert feed_fps([SMOOTH, (0.33, 6106), (1.22, 16008), SMOOTH]) == []
+
+
+def test_one_report_per_laggy_stretch():
+    assert len(feed_fps([SMOOTH] + [(20, 300)] * 12 + [SMOOTH])) == 1

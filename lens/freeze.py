@@ -26,11 +26,18 @@ DRAWING = 2.0      # game frame rate at or above this: the game is still drawing
 COOLDOWN = 10.0    # one bug per freeze, not one per tap
 
 
-def game_fps(msg, package):
-    """Frame rate from a BufferQueueProducer line for the game's own surface, else None."""
+def game_frames(msg, package):
+    """(fps, longest frame in ms) from a BufferQueueProducer line for the game's own surface, else None."""
     if f'[{package}' not in msg or 'queueBuffer: fps=' not in msg:
         return None
-    return float(re.search(r'queueBuffer: fps=([\d.]+)', msg).group(1))
+    m = re.search(r'queueBuffer: fps=([\d.]+).*?max=([\d.]+)', msg)
+    return (float(m.group(1)), float(m.group(2))) if m else None
+
+
+def game_fps(msg, package):
+    """Frame rate from a BufferQueueProducer line for the game's own surface, else None."""
+    f = game_frames(msg, package)
+    return f[0] if f else None
 
 
 def change(a, b, holes):

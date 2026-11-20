@@ -15,7 +15,7 @@ python3 -m venv .venv && .venv/bin/pip install -e .
 .venv/bin/lens watch com.example.game
 ```
 
-- A crash or ANR is saved automatically, and so is a real freeze (you keep tapping, nothing on screen changes for 3 s and the game stops drawing frames). Wrong catch? Type `x` and Enter.
+- A crash or ANR is saved automatically, and so is a real freeze (you keep tapping, nothing on screen changes for 3 s and the game stops drawing frames), and frame drops (the game stutters under 30 fps). Wrong catch? Type `x` and Enter.
 - Saw something the detectors missed? Press **F8** (fn+F8 on a Mac; the terminal needs Accessibility permission), or type `m <what happened>` and Enter. The 15-second clip starts 12 seconds *before* you pressed.
 
 Each bug lands in `bugs/<time>_<kind>/`: `clip.mp4` (15 s, with your taps shown), `step1.jpg…` (where you tapped), `report.md`, `logcat.txt`, `touches.jsonl`, `meta.json`.
