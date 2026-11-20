@@ -67,3 +67,21 @@ class Detector:
                 self.reported.add(hit[0])
                 return Event('text', ts, lines=[f'Broken text on screen: "{line[0]}" ({hit[1]})'])
         return None
+
+
+def read_many(images):
+    """{path: [(text, x, y, w, h)]} for many images in one run of the reader."""
+    binary = ocr_binary()
+    if not binary or not images:
+        return {}
+    out = {}
+    for i in range(0, len(images), 50):
+        done = subprocess.run([str(binary), *map(str, images[i:i + 50])], stdin=subprocess.DEVNULL,
+                              capture_output=True, text=True, timeout=120)
+        for line in done.stdout.splitlines():
+            try:
+                d = json.loads(line)
+            except ValueError:
+                continue
+            out[d['file']] = [(l['text'], l['x'], l['y'], l['w'], l['h']) for l in d['lines']]
+    return out

@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from lens import adb, bugs, logcat
+from lens import adb, bugs, freeze, logcat
 from lens.logcat import Event
 from lens.ring import Ring, segments_for
 from lens.touches import Tracker, to_screen
@@ -92,7 +92,7 @@ def test_bug_folder_and_report(tmp_path):
     m = json.loads((folder / 'meta.json').read_text())
     assert m['kind'] == 'crash' and m['clip'] is False and m['game_version'] == '1.4.2'
     report = (folder / 'report.md').read_text()
-    assert '[Crash] java.lang.NullPointerException' in report and 'Tap the spot in the red box' in report and '% across' not in report
+    assert '[Crash] java.lang.NullPointerException' in report and 'held the top-centre' in report and '% across' not in report
 
 
 def test_manual_note_updates_report(tmp_path):
@@ -114,23 +114,36 @@ def test_cut_survives_pruned_segments(tmp_path):
     assert video.cut([(str(tmp_path / 'gone.ts'), 0.0, 2.0)], 0, 1, tmp_path / 'b.mp4') is False
 
 
-def test_report_steps_are_pictures_not_percentages(tmp_path):
+def test_report_says_what_the_tester_pressed(tmp_path):
     ev = Event('manual', 1000.0, note='Ball goes through the player')
     meta = {'model': 'Infinix X6870', 'android': '16', 'package': PKG, 'game_version': '12.7', 'serial': 'X'}
-    taps = [(985.0, {'type': 'down', 'x': 0.1, 'y': 0.1}),   # before the clip: left out
-            (990.0, {'type': 'down', 'x': 0.66, 'y': 0.76}), (990.1, {'type': 'up', 'x': 0.66, 'y': 0.76}),
-            (995.5, {'type': 'down', 'x': 0.72, 'y': 0.21})]
-    (tmp_path / 'step1.jpg').write_bytes(b'x')
-    text = bugs.report(ev, meta, taps, tmp_path, t0=988.0, clip_seconds=15)
-    assert '% across' not in text
-    assert '1. Tap the spot in the red box (10 s before the bug)' in text and '![step 1](step1.jpg)' in text
-    assert '2. Tap the spot in the red box (4 s before the bug)' in text and 'step2.jpg' not in text
-    assert '15 s leading up to the bug' in text
+    desc = {'did': [(2.0, 'SWITCH'), (2.4, 'SWITCH'), (5.0, 'DIVE'), (11.6, 'dragged the bottom-left')],
+            'summary': 'SWITCH ×2, DIVE, dragged the bottom-left', 'situation': 'FIRST DOWN AND 10 · 2:00 Q2 · DALLAS · 13'}
+    (tmp_path / 'moment.jpg').write_bytes(b'x')
+    text = bugs.report(ev, meta, [], tmp_path, t0=988.0, clip_seconds=15, desc=desc)
+    assert '| On screen | FIRST DOWN AND 10 · 2:00 Q2 · DALLAS · 13 |' in text
+    assert '**SWITCH ×2, DIVE, dragged the bottom-left**' in text
+    assert '1. SWITCH ×2 (10 s before the bug)' in text and '3. dragged the bottom-left (at the bug)' in text
+    assert '![the moment of the bug](moment.jpg)' in text and 'red box' not in text and '% across' not in text
 
 
-# --- freeze / stuck button (lens/freeze.py) ---
+def test_without_labels_taps_are_named_by_place():
+    ev = Event('manual', 1000.0)
+    meta = {'model': 'X', 'android': '16', 'package': PKG, 'game_version': '1', 'serial': 'X'}
+    taps = [(985.0, {'type': 'down', 'x': 0.1, 'y': 0.1}), (985.1, {'type': 'up', 'x': 0.1, 'y': 0.1}),   # before the clip
+            (990.0, {'type': 'down', 'x': 0.9, 'y': 0.8}), (990.1, {'type': 'up', 'x': 0.9, 'y': 0.8})]
+    text = bugs.report(ev, meta, taps, None, t0=988.0, clip_seconds=15)
+    assert '1. tapped the bottom-right (10 s before the bug)' in text and 'tapped the top-left' not in text
 
-from lens import freeze
+
+def test_label_snapping():
+    from lens import describe
+    known = {'SWITCH': 3, 'SWIT': 9, 'FEINT': 13, 'FEIN': 4, 'ISWITCH': 1}
+    assert describe.snap('SWIT', known) == 'SWITCH' and describe.snap('ISWITCH', known) == 'SWITCH'
+    assert describe.snap('FEINT', known) == 'FEINT' and describe.snap('FEIN', known) == 'FEINT'
+    assert describe.label_at([('JUMP', 0.75, 0.68, 0.06, 0.04)], 0.79, 0.72) == 'JUMP'
+    assert describe.label_at([('JUMP', 0.75, 0.68, 0.06, 0.04)], 0.2, 0.7) is None
+
 
 
 def frame(shade=50, box=None):
@@ -299,3 +312,11 @@ def test_each_text_bug_reported_once():
     det = text.Detector()
     assert det.check(1.0, [('JUMP',), ('MENU_START_TITLE',)]).lines[0].startswith('Broken text on screen: "MENU_START_TITLE"')
     assert det.check(4.0, [('MENU_START_TITLE',)]) is None
+
+
+def test_situation_is_the_scoreboard_not_the_status_bar():
+    from lens import describe
+    top = lambda t, x: (t, x, 0.01, 0.1, 0.03)
+    assert describe.situation([top('DALLAS', 0.5), top('SECOND DOWN AND 11', 0.0), top('13', 0.6), top('1:45 Q2', 0.3),
+                               top('JUMP', 0.8)[:2] + (0.7, 0.05, 0.04)]) == 'SECOND DOWN AND 11 · 1:45 Q2 · DALLAS · 13'
+    assert describe.situation([top('08:57 0 0 0 9', 0.0), top('* Ш kB/s', 0.4), top('vowiFi ıІ| → 79•4¾', 0.8)]) == ''
