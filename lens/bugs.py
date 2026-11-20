@@ -7,8 +7,8 @@ from pathlib import Path
 from .logcat import headline
 
 KIND_LABEL = {'crash': 'Crash', 'anr': 'App not responding', 'manual': 'Bug',
-              'freeze': 'Freeze', 'lag': 'Frame drops', 'text': 'Text bug'}
-SEEN = ('freeze', 'lag', 'text')   # caught from the screen and taps, not the log
+              'freeze': 'Freeze', 'lag': 'Frame drops', 'text': 'Text bug', 'glitch': 'Visual glitch'}
+SEEN = ('freeze', 'lag', 'text', 'glitch')   # caught from the screen and taps, not the log
 
 
 def title(ev):
@@ -68,7 +68,8 @@ def report(ev, meta, touches, folder=None, t0=None, clip_seconds=None, desc=None
     elif ev.kind in SEEN:
         actual = (ev.lines[0] if ev.lines else KIND_LABEL[ev.kind]) + (f'. Tester: {ev.note}' if ev.note else '')
         expected = {'lag': 'The game stays smooth (45-60 fps).',
-                    'text': 'Every label shows real text, not a key or a placeholder.'}.get(ev.kind, 'The game reacts to every tap.')
+                    'text': 'Every label shows real text, not a key or a placeholder.',
+                    'glitch': 'Every model and surface has its texture.'}.get(ev.kind, 'The game reacts to every tap.')
     else:
         actual = ev.note or (f'The game {"crashed" if ev.kind == "crash" else "stopped responding"}: `{title(ev)}`')
         expected = 'The game keeps running normally.'

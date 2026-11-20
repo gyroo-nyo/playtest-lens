@@ -7,7 +7,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import adb, bugs, freeze, lag, logcat, text, video
+from . import adb, bugs, freeze, glitch, lag, logcat, text, video
 from .logcat import Event
 from .ring import Ring, segments_for
 from .touches import Tracker
@@ -164,6 +164,7 @@ def cmd_watch(a):
     def read_screen():
         # Text bugs: read a full-size frame every few seconds (macOS Vision, ~0.3 s a frame).
         words, shot, last = text.Detector(), Path(tempfile.mkdtemp(prefix='lens-ocr-')) / 'frame.png', None
+        looks = glitch.Detector()
         if not text.ocr_binary():
             print('Text-bug check off: needs swiftc (Xcode command line tools).', flush=True)
             return
@@ -177,6 +178,9 @@ def cmd_watch(a):
                 if seen.away or not rates.window(ts - 2.5, ts + 0.5):
                     continue
                 last = ts
+                if (ev := looks.check(ts, glitch.small_rgb(shot))):
+                    print(f'\n● GLITCH caught: {bugs.title(ev)}', flush=True)
+                    catch(ev)
                 if (ev := words.check(ts, text.read(shot))):
                     print(f'\n● TEXT caught: {bugs.title(ev)}', flush=True)
                     catch(ev)

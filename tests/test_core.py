@@ -320,3 +320,14 @@ def test_situation_is_the_scoreboard_not_the_status_bar():
     assert describe.situation([top('DALLAS', 0.5), top('SECOND DOWN AND 11', 0.0), top('13', 0.6), top('1:45 Q2', 0.3),
                                top('JUMP', 0.8)[:2] + (0.7, 0.05, 0.04)]) == 'SECOND DOWN AND 11 · 1:45 Q2 · DALLAS · 13'
     assert describe.situation([top('08:57 0 0 0 9', 0.0), top('* Ш kB/s', 0.4), top('vowiFi ıІ| → 79•4¾', 0.8)]) == ''
+
+
+def test_magenta_missing_texture():
+    from lens import glitch
+    grass, pink = bytes([60, 140, 60]), bytes([255, 0, 255])
+    n = glitch.W * glitch.H
+    assert glitch.Detector().check(1.0, pink * (n // 10) + grass * (n - n // 10)).kind == 'glitch'
+    assert glitch.Detector().check(1.0, pink * (n // 100) + grass * (n - n // 100)) is None   # a pink jersey or logo
+    det = glitch.Detector()
+    det.check(1.0, pink * n)
+    assert det.check(5.0, pink * n) is None            # one report, not one every 3 s
