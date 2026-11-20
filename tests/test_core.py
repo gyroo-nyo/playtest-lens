@@ -126,3 +126,95 @@ def test_report_steps_are_pictures_not_percentages(tmp_path):
     assert '1. Tap the spot in the red box (10 s before the bug)' in text and '![step 1](step1.jpg)' in text
     assert '2. Tap the spot in the red box (4 s before the bug)' in text and 'step2.jpg' not in text
     assert '15 s leading up to the bug' in text
+
+
+# --- freeze / stuck button (lens/freeze.py) ---
+
+from lens import freeze
+
+
+def frame(shade=50, box=None):
+    """A flat gray frame, optionally with a bright box (x0, y0, x1, y1 in pixels) = something on screen."""
+    f = bytearray([shade]) * (freeze.W * freeze.H)
+    if box:
+        x0, y0, x1, y1 = box
+        for y in range(y0, y1):
+            f[y * freeze.W + x0:y * freeze.W + x1] = bytes([250]) * (x1 - x0)
+    return bytes(f)
+
+
+def play(det, frames, taps, fps=None):
+    """frames: [(t, frame)], taps: [(t, x, y)], fps: f(t) -> the game's frame rate each second
+    (default: the game froze at 1.5 s). Feeds them in time order; returns the events."""
+    fps = fps or (lambda t: 0.0 if t >= 1.5 else 47.0)
+    events = []
+    feed = [(t, 'tap', (x, y)) for t, x, y in taps] + [(t, 'frame', f) for t, f in frames]
+    feed += [(t / 1.0, 'fps', fps(t)) for t in range(0, int(max(t for t, _ in frames)) + 1)]
+    for t, kind, v in sorted(feed, key=lambda e: e[0]):
+        if kind == 'fps':
+            det.drawing(t, v)
+        elif kind == 'tap':
+            det.touch(t, {'type': 'down', 'x': v[0], 'y': v[1]})
+            det.touch(t + 0.05, {'type': 'up', 'x': v[0], 'y': v[1]})
+        elif (ev := det.frame(t, v)):
+            events.append(ev)
+    return events
+
+
+def test_freeze_when_taps_change_nothing():
+    still = [(t / 5, frame()) for t in range(0, 40)]                     # 8 s of the same screen
+    taps = [(2.0, 0.2, 0.5), (3.0, 0.8, 0.3), (4.0, 0.5, 0.8)]
+    [ev] = play(freeze.Detector(), still, taps)
+    assert ev.kind == 'freeze' and ev.ts == 2.0
+
+
+def test_show_taps_dot_is_not_a_change():
+    # the white dot at the finger changes pixels there, which must not count as the game reacting
+    frames = [(t / 5, frame(box=(28, 40, 36, 48)) if 2.0 <= t / 5 < 2.3 else frame()) for t in range(0, 40)]
+    [ev] = play(freeze.Detector(), frames, [(2.0, 0.2, 0.5), (3.0, 0.8, 0.3), (4.0, 0.5, 0.8)])
+    assert ev.kind == 'freeze'
+
+
+def test_still_screen_while_the_game_draws_is_not_a_freeze():
+    # GFL's pre-snap: nothing moves until GO, taps on the field do nothing, but the game draws 47 fps
+    still = [(t / 5, frame()) for t in range(0, 40)]
+    taps = [(2.0 + i * 0.3, 0.6, 0.4) for i in range(10)]
+    assert play(freeze.Detector(), still, taps, fps=lambda t: 47.0) == []
+
+
+def test_no_frame_rate_log_means_no_freeze_reports():
+    still = [(t / 5, frame()) for t in range(0, 40)]
+    det = freeze.Detector()
+    det.drawing = lambda *a: None          # this phone never logs the game's frame rate
+    assert play(det, still, [(2.0, 0.2, 0.5), (3.0, 0.8, 0.3), (4.0, 0.5, 0.8)]) == []
+
+
+def test_game_fps_from_the_log():
+    line = 'queueBuffer: fps=46.29 dur=1015.19 max=33.65 min=15.93'
+    assert freeze.game_fps(f'[462ec03 SurfaceView[superfusion.gfl/superfusion.gfl.AndroidLauncher](BLAST)#28198] {line}', 'superfusion.gfl') == 46.29
+    assert freeze.game_fps(f'[SurfaceView[com.other/x]] {line}', 'superfusion.gfl') is None
+
+
+def test_spamming_jump_while_the_game_moves_is_never_a_bug():
+    # GFL's JUMP gives no feedback on cooldown, but the players keep running: no bug
+    frames = [(t / 5, frame(box=(40 + (t % 10), 20, 80 + (t % 10), 70))) for t in range(0, 50)]
+    taps = [(1.0 + i * 0.3, 0.8, 0.7) for i in range(25)]
+    assert play(freeze.Detector(), frames, taps) == []
+
+
+def test_a_couple_of_taps_on_a_quiet_menu_is_not_a_bug():
+    still = [(t / 5, frame()) for t in range(0, 40)]
+    assert play(freeze.Detector(), still, [(2.0, 0.3, 0.3), (2.5, 0.6, 0.6)]) == []
+
+
+def test_one_bug_per_stuck_moment():
+    still = [(t / 5, frame()) for t in range(0, 60)]
+    taps = [(2.0 + i * 0.5, 0.5, 0.5) for i in range(14)]
+    assert len(play(freeze.Detector(), still, taps)) == 1
+
+
+def test_rotation_from_window_manager():
+    from lens import adb
+    assert adb.parse_rotation('  mCurrentRotation=ROTATION_270 mLastOrientation=0') == 3
+    assert adb.parse_rotation('DisplayContent{...} mRotation=1 mAltOrientation=false') == 1
+    assert adb.parse_rotation('nothing here') is None

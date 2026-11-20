@@ -48,9 +48,22 @@ def info(serial, package):
             'package': package, 'game_version': version.group(1) if version else '?', 'serial': serial}
 
 
+def parse_rotation(dumpsys_window):
+    """0-3 from `dumpsys window displays`, or None. Newer Android (16 on Infinix) has no
+    SurfaceOrientation in `dumpsys input`, so read the window manager instead."""
+    m = re.search(r'mCurrentRotation=ROTATION_(\d+)', dumpsys_window)
+    if m:
+        return int(m.group(1)) // 90
+    m = re.search(r'\bmRotation=(\d)\b', dumpsys_window)
+    return int(m.group(1)) if m else None
+
+
 def rotation(serial):
-    m = re.search(r'SurfaceOrientation:\s*(\d)', shell(serial, 'dumpsys input'))
-    return int(m.group(1)) if m else 0
+    r = parse_rotation(shell(serial, 'dumpsys window displays'))
+    if r is None:
+        m = re.search(r'SurfaceOrientation:\s*(\d)', shell(serial, 'dumpsys input'))
+        r = int(m.group(1)) if m else 0
+    return r
 
 
 def find_touchscreen(getevent_pl):

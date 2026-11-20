@@ -26,7 +26,7 @@ phone ──adb──▶ capture ──▶ ring buffer (30 s: video, touches, lo
 |---|---|---|
 | Crash | `logcat` | `FATAL EXCEPTION`, native crash / tombstone, Unity `Crash!!!`, process died |
 | Not responding | `logcat` | `ANR in <package>` |
-| Freeze / hang | video + `getevent` | frame unchanged > 2 s while touches arrive |
+| Freeze | video + `getevent` + `logcat` | 3+ taps, the **whole** screen unchanged for 3 s (Show-taps dots ignored) **and** the game's own frame rate (BufferQueueProducer `queueBuffer: fps=` for its surface) under 2 fps. Video alone flagged GFL's pre-snap screen. No frame-rate log on a phone = no auto freeze reports. Stuck buttons are left to manual marks (a dead spot and a broken button look the same). `x` + Enter files a wrong catch under `bugs/_false_alarms/` |
 | Frame drops | `dumpsys gfxinfo <pkg> framestats` | janky-frame % or FPS under a threshold for > 1 s |
 | Visual glitch | video | black / magenta missing textures (pixel stats), then a local vision model to confirm |
 | Text bug | OCR on frames | raw string keys (`MENU_START_TITLE`), cut-off text, `null`/`{0}` |
@@ -98,6 +98,7 @@ crashes, listens for the F8 mark, and writes one folder per bug.
   `bugs/<time>_<kind>/` with `clip.mp4` (-12 s/+3 s, cut from the segments, with Android's "Show taps" dots), `step1.jpg…` (the frame at each of the last 5 taps with a red box on the spot), `logcat.txt` (60 s
   before + 3 s after), `touches.jsonl`, `meta.json` (device, Android version, game version, kind,
   matched lines, note), and `report.md` (what happened, the clip, picture steps; AI-written steps come in phase 3).
+- **Late marks:** a manual mark also saves `full.mp4`, the 30 s before it, for when F8 came late.
 - **Robustness:** adb streams restart after the phone drops off USB; the recorder waits for an
   authorized phone and restarts after a rotation; no subprocess reads the terminal, so typed notes
   reach Lens.

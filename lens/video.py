@@ -14,9 +14,9 @@ def created(st):
 
 
 class Recorder(threading.Thread):
-    def __init__(self, serial, folder, keep=20):
+    def __init__(self, serial, folder, keep=25, on_frame=None):
         super().__init__(daemon=True)
-        self.serial, self.dir, self.keep = serial, Path(folder), keep
+        self.serial, self.dir, self.keep, self.on_frame = serial, Path(folder), keep, on_frame
         self.dir.mkdir(parents=True, exist_ok=True)
         self.stopped = threading.Event()
         self.procs = []
@@ -51,8 +51,12 @@ class Recorder(threading.Thread):
                                    '-an', '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p',
                                    '-force_key_frames', 'expr:gte(t,n_forced*1)',
                                    '-f', 'segment', '-segment_time', str(SEG_SECONDS), '-reset_timestamps', '1',
-                                   '-segment_start_number', str(n), str(self.dir / 'seg%06d.ts')], stdin=sr.stdout,
-                                  stderr=subprocess.DEVNULL)
+                                   '-segment_start_number', str(n), str(self.dir / 'seg%06d.ts'),
+                                   # a second output for the detectors: tiny gray frames, 5 a second, on stdout
+                                   *(['-vf', 'fps=5,scale=160:90,format=gray', '-f', 'rawvideo', 'pipe:1'] if self.on_frame else [])],
+                                  stdin=sr.stdout, stdout=subprocess.PIPE if self.on_frame else None, stderr=subprocess.DEVNULL)
+            if self.on_frame:
+                threading.Thread(target=self.frames, args=(ff.stdout,), daemon=True).start()
             sr.stdout.close()
             self.procs = [sr, ff]
             code = ff.wait()
@@ -65,6 +69,12 @@ class Recorder(threading.Thread):
             if time.monotonic() - began < 3:  # died at once (screen off, phone busy): don't spin
                 self.stopped.wait(3)
 
+    def frames(self, pipe):
+        size = 160 * 90
+        while chunk := pipe.read(size):
+            if len(chunk) == size:
+                self.on_frame(time.time(), chunk)
+
     def segments(self):
         """[(path, start, end)] in host time."""
         segs = []
@@ -76,6 +86,11 @@ class Recorder(threading.Thread):
     def prune(self):
         for p in sorted(self.dir.glob('seg*.ts'), key=lambda p: p.stat().st_mtime)[:-self.keep]:
             p.unlink(missing_ok=True)
+
+    def restart(self):
+        """Start screenrecord again (the loop picks it up), e.g. after the screen turned sideways."""
+        for p in self.procs:
+            p.terminate()
 
     def stop(self):
         self.stopped.set()

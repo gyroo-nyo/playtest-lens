@@ -6,12 +6,16 @@ from pathlib import Path
 
 from .logcat import headline
 
-KIND_LABEL = {'crash': 'Crash', 'anr': 'App not responding', 'manual': 'Bug'}
+KIND_LABEL = {'crash': 'Crash', 'anr': 'App not responding', 'manual': 'Bug',
+              'freeze': 'Freeze'}
+SEEN = ('freeze',)   # caught from the screen and taps, not the log
 
 
 def title(ev):
     if ev.kind == 'manual':
         return ev.note or 'Marked by tester'
+    if ev.kind in SEEN:
+        return ev.note or (ev.lines[0] if ev.lines else KIND_LABEL[ev.kind])
     return headline(ev.lines) or KIND_LABEL[ev.kind]
 
 
@@ -55,6 +59,9 @@ def report(ev, meta, touches, folder=None, t0=None, clip_seconds=None):
     if ev.kind == 'manual':
         actual = ev.note or '_Describe what went wrong (see clip.mp4)._'
         expected = '_What should have happened?_'
+    elif ev.kind in SEEN:
+        actual = (ev.lines[0] if ev.lines else KIND_LABEL[ev.kind]) + (f'. Tester: {ev.note}' if ev.note else '')
+        expected = 'The game reacts to every tap.'
     else:
         actual = ev.note or (f'The game {"crashed" if ev.kind == "crash" else "stopped responding"}: `{title(ev)}`')
         expected = 'The game keeps running normally.'
@@ -79,7 +86,7 @@ def report(ev, meta, touches, folder=None, t0=None, clip_seconds=None):
 {steps}
 
 ## Attachments
-- `clip.mp4`, `step*.jpg`
+- `clip.mp4`, `step*.jpg`{chr(10) + '- `full.mp4`: the 30 s before, in case the moment came earlier' if folder and (folder / 'full.mp4').exists() else ''}
 - `logcat.txt` (device log), `touches.jsonl` (raw taps)
 """
 

@@ -5,13 +5,15 @@ import sys
 import tempfile
 import threading
 import time
+from pathlib import Path
 
-from . import adb, bugs, logcat, video
+from . import adb, bugs, freeze, logcat, video
 from .logcat import Event
 from .ring import Ring, segments_for
 from .touches import Tracker
 
 BEFORE, AFTER = 12, 3   # a 15 s clip: long enough to see the lead-up, short enough to watch
+FULL = 30               # full.mp4 for manual marks: pressing F8 late shouldn't lose the bug
 
 
 def pick_device():
@@ -55,14 +57,23 @@ def cmd_watch(a):
     s = ['-s', serial]
     meta = adb.info(serial, a.package)
     offset = adb.clock_offset(serial)
-    print(f'Watching {a.package} {meta["game_version"]} on {model}. Mark a bug: {a.hotkey.upper()} or type "m <note>" + Enter. Ctrl+C to stop.')
+    print(f'Watching {a.package} {meta["game_version"]} on {model}. Mark a bug: {a.hotkey.upper()} or type "m <note>" + Enter. Wrong catch? "x" + Enter. Ctrl+C to stop.')
 
     logs, touches = Ring(60), Ring(60)
     pids = {'set': adb.pids(serial, a.package)}
     detector = logcat.Detector(a.package)
-    rec = video.Recorder(serial, tempfile.mkdtemp(prefix='lens-video-'))
+    seen = freeze.Detector()
+
+    def on_frame(ts, data):
+        ev = seen.frame(ts, data)
+        if ev:
+            print(f'\n● {ev.kind.upper()} caught: {bugs.title(ev)}', flush=True)
+            catch(ev)
+
+    rec = video.Recorder(serial, tempfile.mkdtemp(prefix='lens-video-'), on_frame=on_frame)
     rec.start()
     last_mark = {'folder': None, 'ev': None, 't0': None}
+    last_auto = {'folder': None}
 
     def capture(ev):
         # Wait until the segment holding the clip's end is finished, not still being written.
@@ -71,8 +82,13 @@ def cmd_watch(a):
         tw = touches.window(t0, t1)
         folder = bugs.write(a.out, ev, meta, logs.window(ev.ts - 60, t1), tw,
                             lambda out: video.cut(segments_for(rec.segments(), t0, t1), t0, t1, out), t0, BEFORE + AFTER)
+        if ev.kind != 'manual':
+            last_auto['folder'] = folder
         if ev.kind == 'manual':
             last_mark.update(folder=folder, ev=ev, touches=tw, t0=t0)
+            f0 = ev.ts - FULL
+            video.cut(segments_for(rec.segments(), f0, t1), f0, t1, folder / 'full.mp4')
+            bugs.update(folder, ev, meta, tw, True, t0, BEFORE + AFTER)   # lists full.mp4
         print(f'\n● {ev.kind.upper()} saved: {folder}', flush=True)
 
     def catch(ev):
@@ -83,6 +99,9 @@ def cmd_watch(a):
         if not e:
             return
         logs.add(e.ts + offset, e.raw)
+        fps = freeze.game_fps(e.msg, a.package)
+        if fps is not None:
+            seen.drawing(e.ts + offset, fps)
         ev = detector.feed(e, e.ts + offset, pids['set'])
         if ev:
             print(f'\n● {ev.kind.upper()} caught: {bugs.title(ev)}', flush=True)
@@ -103,7 +122,7 @@ def cmd_watch(a):
         path, mx, my = ts
         tracker = Tracker(mx, my, adb.rotation(serial))
         procs.append(stream([*s, 'shell', 'getevent', '-lt', path],
-                            lambda t, line: (ev := tracker.feed(line)) and touches.add(t, ev)))
+                            lambda t, line: (ev := tracker.feed(line)) and (touches.add(t, ev), seen.touch(t, ev))))
     else:
         print('No touchscreen found: bugs will have no touch log.')
 
@@ -116,7 +135,18 @@ def cmd_watch(a):
     def stdin_loop():
         for line in sys.stdin:
             line = line.strip()
-            if line == 'm' or line.startswith('m '):
+            if line == 'x':
+                # A false alarm: kept aside (not deleted) so the detectors can be tuned on it.
+                f = last_auto['folder']
+                if f and Path(f).exists():
+                    dest = Path(a.out) / '_false_alarms' / Path(f).name
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    Path(f).rename(dest)
+                    last_auto['folder'] = None
+                    print(f'  moved to {dest} (false alarm)', flush=True)
+                else:
+                    print('  nothing to dismiss', flush=True)
+            elif line == 'm' or line.startswith('m '):
                 mark(line[2:].strip())
             elif line and last_mark['ev'] and not last_mark['ev'].note:
                 last_mark['ev'].note = line
@@ -128,6 +158,16 @@ def cmd_watch(a):
         while True:
             time.sleep(2)
             pids['set'] = adb.pids(serial, a.package) or pids['set']   # keep the old pid while it is dying
+            if ts:   # games turn the screen sideways after Lens starts: map taps with the current rotation
+                try:
+                    r = adb.rotation(serial)
+                    # Some phones keep recording a rotated screen in its old shape, as a thin strip
+                    # with black bars: start the recording again so it fills the frame.
+                    if r % 2 != tracker.rotation % 2:
+                        rec.restart()
+                    tracker.rotation = r
+                except Exception:
+                    pass
             rec.prune()
     except KeyboardInterrupt:
         print('\nStopped.')
