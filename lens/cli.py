@@ -17,13 +17,6 @@ BEFORE, AFTER = 12, 3   # a 15 s clip: long enough to see the lead-up, short eno
 FULL = 30               # full.mp4 for manual marks: pressing F8 late shouldn't lose the bug
 
 
-def pick_device():
-    found = adb.devices()
-    if not found:
-        sys.exit('No phone found. Plug it in, turn on USB debugging, and accept the prompt on the phone.')
-    return found[0]
-
-
 def cmd_devices(_):
     for serial, model in adb.devices() or [('', 'none: plug in a phone with USB debugging on')]:
         print(f'{serial}  {model}')
@@ -53,8 +46,31 @@ class stream:
             self.p.terminate()
 
 
+def open_page(url, a):
+    if sys.platform == 'darwin' and not a.no_open:
+        subprocess.run(['open', url], stdin=subprocess.DEVNULL)
+
+
 def cmd_watch(a):
-    serial, model = pick_device()
+    # The page first, so it opens even before the phone is plugged in (it shows the saved bugs).
+    server = None
+    if not a.no_ui:
+        try:
+            server, url = ui.serve(a.out, None, a.port)
+            print(f'Dashboard: {url}', flush=True)
+        except OSError:
+            url = f'http://127.0.0.1:{a.port}/'
+            print(f'Lens is already running: opening its dashboard ({url}).', flush=True)
+        open_page(url, a)
+    found = adb.devices()
+    if not found:
+        print('Waiting for the phone: plug it in with USB debugging on (Ctrl+C to stop)…', flush=True)
+        try:
+            while not (found := adb.devices()):
+                time.sleep(2)
+        except KeyboardInterrupt:
+            sys.exit('Stopped.')
+    serial, model = found[0]
     if Path(a.out).resolve() == BUGS:
         remember_package(a.package)
     s = ['-s', serial]
@@ -141,14 +157,8 @@ def cmd_watch(a):
 
     # The dashboard: the live phone, the bug feed, clips and reports, on this Mac only.
     live.mark, live.note, live.marks = mark, add_note, marked
-    if not a.no_ui:
-        try:
-            _, url = ui.serve(a.out, live, a.port)
-            print(f'Dashboard: {url}', flush=True)
-            if sys.platform == 'darwin' and not a.no_open:
-                subprocess.run(['open', url], stdin=subprocess.DEVNULL)
-        except OSError:
-            print(f'Dashboard off: port {a.port} is in use (another Lens running?). Try --port 8738.', flush=True)
+    if server:
+        server.RequestHandlerClass.live = live      # the page switches from saved bugs to the live phone
 
     def show_live():
         frame = Path(tempfile.mkdtemp(prefix='lens-live-')) / 'live.jpg'
@@ -262,7 +272,7 @@ def cmd_watch(a):
 def cmd_ui(a):
     server, url = ui.serve(a.out, None, a.port)
     print(f'Dashboard: {url}  (saved bugs in {a.out}/; Ctrl+C to stop)', flush=True)
-    subprocess.run(['open', url], stdin=subprocess.DEVNULL) if sys.platform == 'darwin' else None
+    open_page(url, a)
     try:
         while True:
             time.sleep(3600)
@@ -276,11 +286,11 @@ COMMANDS = {'devices', 'watch', 'ui', '-h', '--help'}
 
 def simple(argv):
     """`lens` alone watches the last game; `lens <package>` watches that one."""
-    if not argv:
+    if not argv or (argv[0].startswith('-') and argv[0] not in COMMANDS):   # `lens` or `lens --port 8738`
         package = ui.settings(BUGS).get('package')
         if not package:
             sys.exit('Which game? Run: lens <package>, e.g. lens superfusion.gfl (next time just: lens)')
-        return ['watch', package]
+        return ['watch', package, *argv]
     if argv[0] not in COMMANDS and '.' in argv[0] and not argv[0].startswith('-'):
         return ['watch', *argv]
     return argv
@@ -310,6 +320,7 @@ def main(argv=None):
     u = sub.add_parser('ui', help='open the dashboard on saved bugs (no phone needed)')
     u.add_argument('--out', default=str(BUGS), help=f'the bugs folder (default: {BUGS})')
     u.add_argument('--port', type=int, default=ui.PORT, help=f'port (default: {ui.PORT})')
+    u.add_argument('--no-open', action='store_true', help="don't open the browser")
     u.set_defaults(fn=cmd_ui)
     a = ap.parse_args(argv)
     a.fn(a)

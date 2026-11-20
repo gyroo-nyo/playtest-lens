@@ -4,7 +4,8 @@ Two ways, both started by the tester:
 - Copy for Discord: the message as Discord Markdown (under 2,000 characters) to paste yourself.
 - Send to Discord: posts the message with a small copy of the clip and the picture through a channel
   webhook the tester pastes once (Server Settings → Integrations → Webhooks). Nothing is sent otherwise.
-Discord takes about 10 MB per message without server boosts, so the clip is re-encoded to 1280 px wide.
+Discord takes 20 MB per message here (the tester's limit): a clip that fits goes as it is, a bigger one is
+re-encoded to 1280 px wide.
 """
 import json
 import re
@@ -17,7 +18,7 @@ from pathlib import Path
 from . import bugs
 
 WEBHOOK = re.compile(r'https://(?:(?:ptb|canary)\.)?discord(?:app)?\.com/api/webhooks/\d+/[\w-]+')
-LIMIT = 9.5 * 1024 * 1024       # bytes per message, with room for the text
+LIMIT = 19.5 * 1024 * 1024      # bytes per message (Discord's 20 MB), with room for the text
 MAX_CHARS = 2000
 
 
@@ -54,15 +55,18 @@ def message(folder):
 
 
 def small_clip(folder):
-    """discord.mp4: the clip at 1280 px wide and a capped bitrate (a 15 s clip comes out around 1–4 MB)."""
+    """The clip as it is when it fits next to the picture, else discord.mp4: 1280 px wide, bitrate capped
+    so 15 s stays well under the limit."""
     folder = Path(folder)
     src, out = folder / 'clip.mp4', folder / 'discord.mp4'
     if not src.exists():
         return None
+    if src.stat().st_size <= LIMIT - 1024 * 1024:
+        return src
     if out.exists() and out.stat().st_mtime >= src.stat().st_mtime:
         return out
     ok = subprocess.run(['ffmpeg', '-nostdin', '-loglevel', 'fatal', '-y', '-i', str(src), '-vf', "scale='min(1280,iw)':-2",
-                         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '26', '-maxrate', '3500k', '-bufsize', '7000k',
+                         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-maxrate', '7000k', '-bufsize', '14000k',
                          '-pix_fmt', 'yuv420p', '-an', '-movflags', '+faststart', str(out)], stdin=subprocess.DEVNULL).returncode == 0
     return out if ok else None
 

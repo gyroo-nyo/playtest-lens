@@ -446,6 +446,7 @@ def test_simple_command(monkeypatch, tmp_path):
         cli.simple([])                                            # no game yet: says how to start
     cli.remember_package('superfusion.gfl')
     assert cli.simple([]) == ['watch', 'superfusion.gfl']
+    assert cli.simple(['--port', '8738']) == ['watch', 'superfusion.gfl', '--port', '8738']
 
 
 def test_discord_message_and_send(tmp_path):
@@ -470,7 +471,10 @@ def test_discord_message_and_send(tmp_path):
     if shutil.which('ffmpeg'):                                         # the clip made small for pasting by hand
         sp.run(['ffmpeg', '-nostdin', '-loglevel', 'fatal', '-f', 'lavfi', '-i', 'testsrc=size=1920x1080:rate=30:duration=1',
                 '-pix_fmt', 'yuv420p', str(folder / 'clip.mp4')], check=True)
-        small = discord.small_clip(folder)
+        assert discord.small_clip(folder).name == 'clip.mp4'              # fits in 20 MB: sent as it is
+        import unittest.mock as mock
+        with mock.patch.object(discord, 'LIMIT', 1024 * 1024 + 10):       # too big: re-encoded to fit
+            small = discord.small_clip(folder)
         assert small.name == 'discord.mp4' and small.stat().st_size < discord.LIMIT
     ui.save_settings(tmp_path, discord_webhook=hook)
     assert ui.public(tmp_path) == {'discord': True}                    # the page never sees the webhook

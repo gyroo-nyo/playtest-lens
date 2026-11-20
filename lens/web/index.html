@@ -192,7 +192,7 @@
         <div><span class="readout" id="fps">--</span><small class="label">FPS</small></div>
       </div>
       <div class="frame" id="frame"><span class="b1"></span><span class="b2"></span>
-        <p class="empty" id="frameEmpty">Not recording. Plug in the phone and run <br>lens watch superfusion.gfl</p>
+        <p class="empty" id="frameEmpty">No phone recording. Plug it in with USB debugging on:<br>Lens picks it up by itself.</p>
       </div>
       <div class="mark-row" id="markRow">
         <label class="sr" for="markNote" id="markLabel">Mark a bug</label>
@@ -324,7 +324,7 @@ function renderLive() {
     if (img) img.hidden = true;
     $('#frameEmpty').hidden = false;
     $('#frameEmpty').innerHTML = L ? (L.connected ? 'Waiting for the first frame…' : 'Phone not connected. Check the cable and USB debugging.')
-                                  : 'Not recording. Plug in the phone and run <br>lens watch superfusion.gfl';
+                                  : 'No phone recording. Plug it in with USB debugging on:<br>Lens picks it up by itself.';
   }
 }
 
@@ -523,7 +523,7 @@ async function openDiscord() {
   const res = await post(`/api/bug/${encodeURIComponent(bug.id)}/discord-text`);
   if (!res.ok) return msg('Couldn\u2019t build the message.', true);
   $('#discordPreview').textContent = (await res.json()).text;
-  const files = [bug.files.includes('clip.mp4') && 'clip.mp4 (made smaller for Discord)', bug.files.includes('moment.jpg') && 'moment.jpg'].filter(Boolean);
+  const files = [bug.files.includes('clip.mp4') && 'clip.mp4', bug.files.includes('moment.jpg') && 'moment.jpg'].filter(Boolean);
   $('#discordAttach').innerHTML = files.length ? files.map(f => `<span>${esc(f)}</span>`).join('') : '<span>No clip or picture for this bug</span>';
   $('#hookGroup').hidden = state.settings.discord; $('#hookErr').hidden = true; $('#hookInput').value = '';
   $('#dSend').disabled = false; $('#dSend').textContent = bug.discord ? 'Send again' : 'Send to channel';
@@ -625,7 +625,7 @@ $('#dCopy').onclick = async () => {
   msg('Copied. Making a clip small enough for Discord…');
   const r = await post(`/api/bug/${encodeURIComponent(bug.id)}/discord-clip`, {reveal: true});
   const out = await r.json();
-  msg(r.ok ? `Finder is showing ${out.file} (${out.mb} MB): paste the text in Discord and drag it in.` : out.error, !r.ok);
+  msg(r.ok ? `Finder is showing ${out.file} (${out.mb} MB, under Discord\u2019s 20 MB): paste the text in Discord and drag it in.` : out.error, !r.ok);
 };
 
 refresh().then(() => {

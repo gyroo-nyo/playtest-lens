@@ -30,7 +30,7 @@ class Recorder(threading.Thread):
             return False
 
     def run(self):
-        n, waiting = 0, False
+        n, waiting, paused = 0, False, False
         while not self.stopped.is_set():
             adb = ['adb', *(['-s', self.serial] if self.serial else [])]
             # Before the phone allows USB debugging (or after the cable drops), screenrecord fails at once:
@@ -65,8 +65,15 @@ class Recorder(threading.Thread):
             code = ff.wait()
             # The stream breaks when the screen rotates (a landscape game opening) or the cable drops.
             # ffmpeg's own errors are a wall of red text, so say it once, plainly, and carry on.
+            quick = time.monotonic() - began < 3
             if code != 0 and not self.stopped.is_set():
-                print('Recording restarted (screen rotated or the stream was interrupted).', flush=True)
+                if not quick:
+                    print('Recording restarted (screen rotated or the stream was interrupted).', flush=True)
+                elif not paused:   # fails at once, again and again: say it once
+                    print('Recording paused: is the phone screen off or locked? Unlock it and Lens carries on.', flush=True)
+                    paused = True
+            if not quick:
+                paused = False
             n = max((int(p.stem[3:]) for p in self.dir.glob('seg*.ts')), default=n) + 1
             self.prune()
             if time.monotonic() - began < 3:  # died at once (screen off, phone busy): don't spin
