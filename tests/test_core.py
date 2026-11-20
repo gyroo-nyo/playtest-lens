@@ -396,6 +396,8 @@ def test_dashboard_server(tmp_path):
             except urllib.error.HTTPError as e:
                 return e.code, e.read()
         assert url.startswith('http://127.0.0.1:')
+        assert get('/api/state', {'Host': 'evil.example'})[0] == 403                  # DNS rebinding
+        assert post(f'/api/bug/{folder.name}/dismiss', headers={'X-Lens': '1', 'Host': 'evil.example'})[0] == 403
         assert b'Playtest Lens' in get('/')[2]
         state = json.loads(get('/api/state')[2])
         assert state['live'] is None and state['bugs'][0]['title'] == 'Ball clips through the post'

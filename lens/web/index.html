@@ -365,6 +365,7 @@ async function saveReport() {
 }
 
 async function writeAi() {
+  if (bug.edited && !confirm('Replace your edited report with a new AI draft? Your edits will be lost.')) return;
   const b = $('#aAi'); b.disabled = true; b.setAttribute('aria-busy', 'true'); msg('WRITING… the local model takes 5–30 s.');
   const res = await post(`/api/bug/${encodeURIComponent(bug.id)}/ai`);
   const out = await res.json();

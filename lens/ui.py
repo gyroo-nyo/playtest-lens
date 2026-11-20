@@ -2,8 +2,8 @@
 
 Standard library only. Binds to 127.0.0.1: clips can show private chats and games under NDA, so
 nothing else on the network may reach it. Serves files only from inside the bugs folder, supports
-HTTP Range so Safari can play and seek the clips, and only accepts actions sent with the page's
-own header (another website can't post to it).
+HTTP Range so Safari can play and seek the clips, answers only requests addressed to 127.0.0.1 or
+localhost (no DNS rebinding), and only accepts actions sent with the page's own header.
 """
 import json
 import mimetypes
@@ -132,10 +132,21 @@ class Handler(BaseHTTPRequestHandler):
             headers['Content-Range'] = f'bytes {start}-{end}/{size}'
         self.send(206 if 'Content-Range' in headers else 200, data, kind, headers)
 
+    def local(self):
+        """Only requests addressed to this Mac. A page on another domain that re-points its name to
+        127.0.0.1 (DNS rebinding) would otherwise count as this page and could read the clips."""
+        port = self.server.server_address[1]
+        if self.headers.get('Host') in (f'127.0.0.1:{port}', f'localhost:{port}'):
+            return True
+        self.send(403, {'error': 'forbidden'})
+        return False
+
     def do_HEAD(self):
         self.do_GET()
 
     def do_GET(self):
+        if not self.local():
+            return
         path = urllib.parse.urlparse(self.path).path
         if path == '/':
             return self.send(200, PAGE.read_bytes(), 'text/html; charset=utf-8')
@@ -158,6 +169,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send(404, {'error': 'not found'})
 
     def do_POST(self):
+        if not self.local():
+            return
         # Only the page itself sends this header; a cross-site form or fetch can't add it without CORS.
         if self.headers.get('X-Lens') != '1':
             return self.send(403, {'error': 'forbidden'})

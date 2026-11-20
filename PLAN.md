@@ -116,10 +116,10 @@ crashes, listens for the F8 mark, and writes one folder per bug.
 - **Feed:** caught bugs and false alarms, newest first; short notes show the scoreboard beside them.
 - **Bug:** what was on screen and what was pressed; Clip (15 s clip or the 30 s before, a scrubber with
   tap ticks and the bug in orange, the picture at the bug), Report (editable Markdown; edits survive a
-  rebuild), Log (matched lines marked).
+  rebuild, and an AI draft asks before replacing them), Log (matched lines marked).
 - **Actions:** Open GitHub issue (a prefilled new-issue page on the repo you set; nothing is posted, clips are
   attached by hand), Copy Markdown, Write with AI (local Ollama; needs a 3+ word note), False alarm.
-- **Safety:** 127.0.0.1 only; files only from inside `bugs/`; POSTs need the page's `X-Lens` header; HTTP
+- **Safety:** 127.0.0.1 only, and only requests addressed to it (no DNS rebinding); files only from inside `bugs/`; POSTs need the page's `X-Lens` header; HTTP
   Range so Safari plays clips.
 - **Done when** (still to check on the phone): a catch shows up in the feed live, and goes to a GitHub issue
   in under 30 s.
