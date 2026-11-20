@@ -25,7 +25,7 @@ class Recorder(threading.Thread):
     def ready(self, adb):
         """The phone is connected and has allowed USB debugging (not 'unauthorized' or 'authorizing')."""
         try:
-            return subprocess.run([*adb, 'get-state'], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=5).stdout.strip() == 'device'
+            return subprocess.run([*adb, 'get-state'], stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding='utf-8', timeout=5).stdout.strip() == 'device'
         except subprocess.TimeoutExpired:
             return False
 
@@ -141,7 +141,7 @@ def cut(segments, t0, t1, out, fps=None):
         shutil.rmtree(snap, ignore_errors=True)
         return False
     listing = snap / 'list.txt'
-    listing.write_text(''.join(f"file '{p}'\n" for p, _ in kept))
+    listing.write_text(''.join(f"file '{Path(p).as_posix()}'\n" for p, _ in kept), encoding='utf-8')
     start = max(0.0, t0 - kept[0][1])
     # stdin=DEVNULL: ffmpeg reads the terminal for its own keys and would eat the tester's typing.
     cmd = ['ffmpeg', '-loglevel', 'fatal', '-y', '-f', 'concat', '-safe', '0', '-i', str(listing),

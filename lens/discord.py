@@ -31,7 +31,7 @@ def message(folder, details=False):
     plus with `details` the scoreboard, the buttons pressed and the device. At most 2,000 characters."""
     folder = Path(folder)
     ev, meta, touches, m = bugs.load(folder)
-    read = lambda n: json.loads((folder / n).read_text()) if (folder / n).exists() else {}
+    read = lambda n: json.loads((folder / n).read_text(encoding='utf-8')) if (folder / n).exists() else {}
     desc, ai = read('describe.json'), read('ai.json')
     kind = bugs.KIND_LABEL.get(ev.kind, 'Bug')
     title = ai.get('title') or bugs.title(ev)
@@ -117,7 +117,7 @@ def send(webhook, folder, post=None, details=False):
     if status >= 300:
         raise ValueError(f'Discord refused the message ({status}). Try Copy for Discord instead.')
     sent = {'sent': time.strftime('%Y-%m-%d %H:%M:%S'), 'files': [f[1] for f in files]}
-    (folder / 'discord.json').write_text(json.dumps(sent))
+    (folder / 'discord.json').write_text(json.dumps(sent), encoding='utf-8')
     return sent
 
 

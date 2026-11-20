@@ -8,11 +8,13 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from .logcat import Event
 
 SRC = Path(__file__).parent / 'ocr' / 'ocr.swift'
+PS1 = Path(__file__).parent / 'ocr' / 'ocr.ps1'
 BIN = Path.home() / '.cache' / 'playtest-lens' / 'lens-ocr'
 
 CHECKS = [
@@ -32,14 +34,26 @@ def suspicious(text):
 
 
 def ocr_binary():
-    """Path to the compiled reader, building it on first use. None when this Mac can't (no swiftc)."""
+    """The command that runs the reader: Windows' built-in OCR, or macOS Vision (built on first use).
+    None when this machine can't (a Mac without swiftc, or another OS)."""
+    if sys.platform == 'win32':
+        ps = shutil.which('powershell')          # Windows PowerShell 5.1: pwsh 7 can't load the WinRT OCR types
+        return [ps, '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', str(PS1)] if ps else None
+    if sys.platform != 'darwin':
+        return None
     if BIN.exists() and BIN.stat().st_mtime >= SRC.stat().st_mtime:
-        return BIN
+        return [str(BIN)]
     if not shutil.which('swiftc'):
         return None
     BIN.parent.mkdir(parents=True, exist_ok=True)
     done = subprocess.run(['swiftc', '-O', str(SRC), '-o', str(BIN)], stdin=subprocess.DEVNULL, capture_output=True)
-    return BIN if done.returncode == 0 else None
+    return [str(BIN)] if done.returncode == 0 else None
+
+
+def boxes(d):
+    """[(text, x, y, w, h)] from one image's JSON. PowerShell writes a one-line list as a bare object."""
+    lines = d.get('lines') or []
+    return [(l['text'], l['x'], l['y'], l['w'], l['h']) for l in ([lines] if isinstance(lines, dict) else lines)]
 
 
 def read(image):
@@ -47,12 +61,12 @@ def read(image):
     binary = ocr_binary()
     if not binary:
         return []
-    out = subprocess.run([str(binary), str(image)], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
+    out = subprocess.run([*binary, str(image)], stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding='utf-8', timeout=30)
     try:
         data = json.loads(out.stdout.splitlines()[0])
     except (IndexError, ValueError):
         return []
-    return [(l['text'], l['x'], l['y'], l['w'], l['h']) for l in data['lines']]
+    return boxes(data)
 
 
 class Detector:
@@ -76,12 +90,12 @@ def read_many(images):
         return {}
     out = {}
     for i in range(0, len(images), 50):
-        done = subprocess.run([str(binary), *map(str, images[i:i + 50])], stdin=subprocess.DEVNULL,
-                              capture_output=True, text=True, timeout=120)
+        done = subprocess.run([*binary, *map(str, images[i:i + 50])], stdin=subprocess.DEVNULL,
+                              capture_output=True, text=True, encoding='utf-8', timeout=120)
         for line in done.stdout.splitlines():
             try:
                 d = json.loads(line)
             except ValueError:
                 continue
-            out[d['file']] = [(l['text'], l['x'], l['y'], l['w'], l['h']) for l in d['lines']]
+            out[d['file']] = boxes(d)
     return out

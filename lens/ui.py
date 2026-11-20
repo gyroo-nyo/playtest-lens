@@ -19,6 +19,7 @@ from pathlib import Path
 from . import bugs, discord
 
 PAGE = Path(__file__).parent / 'web' / 'index.html'
+FONTS = Path(__file__).parent / 'web' / 'fonts'
 FILES = {'clip.mp4', 'full.mp4', 'moment.jpg'}
 PUBLIC = ('github_repo', 'package', 'discord_details')   # settings the page may see; the Discord webhook is a secret
 PORT = 8737
@@ -55,9 +56,17 @@ def settings_path(root):
 
 def settings(root):
     try:
-        return json.loads(settings_path(root).read_text())
+        return json.loads(settings_path(root).read_text(encoding='utf-8'))
     except (OSError, ValueError):
         return {}
+
+
+def reveal(path):
+    """Show a file selected in Finder (macOS) or File Explorer (Windows)."""
+    if sys.platform == 'darwin':
+        subprocess.run(['open', '-R', str(path)], stdin=subprocess.DEVNULL)
+    elif sys.platform == 'win32':
+        subprocess.run(f'explorer /select,"{path}"', stdin=subprocess.DEVNULL)   # explorer wants the path glued to /select,
 
 
 def public(root):
@@ -68,7 +77,7 @@ def public(root):
 def save_settings(root, **changes):
     s = {**settings(root), **changes}
     settings_path(root).parent.mkdir(parents=True, exist_ok=True)
-    settings_path(root).write_text(json.dumps(s, indent=2))
+    settings_path(root).write_text(json.dumps(s, indent=2), encoding='utf-8')
     return s
 
 
@@ -88,13 +97,13 @@ def detail(root, bug_id):
     folder = bugs.find(root, bug_id)
     if not folder:
         return None
-    m = json.loads((folder / 'meta.json').read_text())
-    read = lambda name: (folder / name).read_text() if (folder / name).exists() else None
+    m = json.loads((folder / 'meta.json').read_text(encoding='utf-8'))
+    read = lambda name: (folder / name).read_text(encoding='utf-8') if (folder / name).exists() else None
     t0 = m.get('clip_start')
     ev_ts = time.mktime(time.strptime(m['time'], '%Y-%m-%d %H:%M:%S')) if m.get('time') else None
     taps = []
     if t0 is not None and (folder / 'touches.jsonl').exists():
-        for line in (folder / 'touches.jsonl').read_text().splitlines():
+        for line in (folder / 'touches.jsonl').read_text(encoding='utf-8').splitlines():
             t = json.loads(line)
             if t.get('type') == 'down' and t['host_ts'] >= t0:
                 taps.append(round(t['host_ts'] - t0, 2))
@@ -182,6 +191,9 @@ class Handler(BaseHTTPRequestHandler):
             if not folder or name not in FILES or not (folder / name).exists():
                 return self.send(404, {'error': 'no such file'})
             return self.file(folder / name, mimetypes.guess_type(name)[0] or 'application/octet-stream')
+        if m := re.fullmatch(r'/fonts/([a-z0-9-]+\.woff2)', path):
+            font = FONTS / m.group(1)
+            return self.file(font, 'font/woff2') if font.exists() else self.send(404, {'error': 'no such font'})
         if path == '/live.jpg':
             frame = self.live and self.live.frame
             if not frame or not Path(frame).exists():
@@ -258,12 +270,12 @@ class Handler(BaseHTTPRequestHandler):
                 save_settings(self.root, discord_details=details)      # the tickbox is remembered
             return self.send(200, {'text': discord.message(bugs.find(self.root, bug_id), details)})
         elif action == 'discord-clip':
-            # For pasting by hand: the clip small enough for Discord, shown in Finder to drag in.
+            # For pasting by hand: the clip small enough for Discord, shown in Finder / Explorer to drag in.
             clip = discord.small_clip(bugs.find(self.root, bug_id))
             if not clip:
                 return self.send(404, {'error': 'This bug has no clip.'})
-            if sys.platform == 'darwin' and body.get('reveal', True):
-                subprocess.run(['open', '-R', str(clip)], stdin=subprocess.DEVNULL)
+            if body.get('reveal', True):
+                reveal(clip)
             return self.send(200, {'file': clip.name, 'mb': round(clip.stat().st_size / 1048576, 1)})
         elif action == 'discord':
             hook = settings(self.root).get('discord_webhook')
@@ -275,7 +287,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(502, {'error': str(e)})
         elif action == 'export':
             repo = settings(self.root).get('github_repo')
-            url = issue_url(repo, (bugs.find(self.root, bug_id) / 'report.md').read_text())
+            url = issue_url(repo, (bugs.find(self.root, bug_id) / 'report.md').read_text(encoding='utf-8'))
             if not url:
                 return self.send(409, {'error': 'Set the GitHub repo (owner/repo) where bugs go first.'})
             return self.send(200, {'url': url})

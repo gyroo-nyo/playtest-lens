@@ -12,7 +12,7 @@ PKG, PIDS = 'superfusion.gfl', {4321}
 
 def run(name, pids=PIDS):
     d, events = logcat.Detector(PKG), []
-    for line in (FX / name).read_text().splitlines():
+    for line in (FX / name).read_text(encoding='utf-8').splitlines():
         e = logcat.parse(line)
         ev = e and d.feed(e, e.ts, pids)
         if ev:
@@ -53,12 +53,12 @@ def test_other_apps_are_ignored():
 
 
 def test_find_touchscreen():
-    assert adb.find_touchscreen((FX / 'getevent_pl.txt').read_text()) == ('/dev/input/event2', 1079, 2399)
+    assert adb.find_touchscreen((FX / 'getevent_pl.txt').read_text(encoding='utf-8')) == ('/dev/input/event2', 1079, 2399)
 
 
 def test_touches_first_finger_only():
     tr = Tracker(1079, 2399)
-    out = [ev for line in (FX / 'touches.txt').read_text().splitlines() if (ev := tr.feed(line))]
+    out = [ev for line in (FX / 'touches.txt').read_text(encoding='utf-8').splitlines() if (ev := tr.feed(line))]
     assert [e['type'] for e in out] == ['down', 'move', 'up']
     assert out[0]['x'] == round(0x21c / 1079, 4) and out[0]['y'] == round(0x4b0 / 2399, 4)
 
@@ -89,9 +89,9 @@ def test_bug_folder_and_report(tmp_path):
     touches = [(1, {'t': 1, 'type': 'down', 'x': .5, 'y': .25}), (2, {'t': 2, 'type': 'up', 'x': .5, 'y': .25})]
     folder = bugs.write(tmp_path, ev, meta, [(1, 'log line')], touches, lambda out: False, t0=0)
     assert {p.name for p in folder.iterdir()} == {'logcat.txt', 'touches.jsonl', 'meta.json', 'report.md'}
-    m = json.loads((folder / 'meta.json').read_text())
+    m = json.loads((folder / 'meta.json').read_text(encoding='utf-8'))
     assert m['kind'] == 'crash' and m['clip'] is False and m['game_version'] == '1.4.2'
-    report = (folder / 'report.md').read_text()
+    report = (folder / 'report.md').read_text(encoding='utf-8')
     assert '[Crash] java.lang.NullPointerException' in report and 'held the top-centre' in report and '% across' not in report
 
 
@@ -99,12 +99,12 @@ def test_manual_note_updates_report(tmp_path):
     ev = Event('manual', 1763561000.0)
     meta = {'model': 'Pixel 7', 'android': '15', 'package': PKG, 'game_version': '1.4.2', 'serial': 'X'}
     folder = bugs.write(tmp_path, ev, meta, [], [], lambda out: False)
-    first = (folder / 'report.md').read_text()
+    first = (folder / 'report.md').read_text(encoding='utf-8')
     assert '[Bug] Marked by tester' in first
     assert 'stopped responding' not in first      # a manual mark isn't a freeze
     ev.note = 'Ball passes through the goalpost'
     bugs.update(folder, ev, meta, [])
-    assert '[Bug] Ball passes through the goalpost' in (folder / 'report.md').read_text()
+    assert '[Bug] Ball passes through the goalpost' in (folder / 'report.md').read_text(encoding='utf-8')
 
 
 def test_cut_survives_pruned_segments(tmp_path):
@@ -342,7 +342,7 @@ def test_dashboard_bug_actions(tmp_path):
         assert bugs.find(tmp_path, bad) is None
     assert bugs.save_report(tmp_path, bug, '# my words')
     bugs.update(folder, Event('manual', 1763561000.0, note='new note'), meta, [])
-    assert (folder / 'report.md').read_text() == '# my words'          # an edit survives a rebuild
+    assert (folder / 'report.md').read_text(encoding='utf-8') == '# my words'          # an edit survives a rebuild
     assert bugs.dismiss(tmp_path, bug) and bugs.listing(tmp_path)['bugs'] == []
     assert [r['id'] for r in bugs.listing(tmp_path)['false_alarms']] == [bug]
     assert bugs.restore(tmp_path, bug) and bugs.listing(tmp_path)['bugs'][0]['id'] == bug
@@ -398,6 +398,7 @@ def test_dashboard_server(tmp_path):
         assert get('/api/state', {'Host': 'evil.example'})[0] == 403                  # DNS rebinding
         assert post(f'/api/bug/{folder.name}/dismiss', headers={'X-Lens': '1', 'Host': 'evil.example'})[0] == 403
         assert b'Playtest Lens' in get('/')[2]
+        assert get('/fonts/silkscreen-700-latin.woff2')[0] == 200 and get('/fonts/nope.woff2')[0] == 404   # fonts ship with Lens
         state = json.loads(get('/api/state')[2])
         assert state['live'] is None and state['bugs'][0]['title'] == 'Ball clips through the post'
         code, headers, body = get(f'/files/{folder.name}/clip.mp4', {'Range': 'bytes=100-199'})
@@ -454,7 +455,7 @@ def test_discord_message_and_send(tmp_path):
     from lens import discord, ui
     meta = {'model': 'Infinix X6870', 'android': '16', 'package': PKG, 'game_version': '1.2', 'serial': 'X'}
     folder = bugs.write(tmp_path, Event('manual', 1763561000.0, note='Kicker freezes mid-kick'), meta, [], [], lambda out: False)
-    (folder / 'describe.json').write_text(json.dumps({'did': [], 'summary': 'DIVE ×5', 'situation': 'SECOND DOWN AND 11'}))
+    (folder / 'describe.json').write_text(json.dumps({'did': [], 'summary': 'DIVE ×5', 'situation': 'SECOND DOWN AND 11'}), encoding='utf-8')
     assert discord.message(folder) == 'Kicker freezes mid-kick'           # the way GFL bugs go out: the explanation
     text = discord.message(folder, details=True)
     assert text.startswith('**[') and 'Kicker freezes mid-kick' in text and 'SECOND DOWN AND 11' in text and len(text) <= 2000
@@ -480,3 +481,17 @@ def test_discord_message_and_send(tmp_path):
         assert small.name == 'discord.mp4' and small.stat().st_size < discord.LIMIT
     ui.save_settings(tmp_path, discord_webhook=hook)
     assert ui.public(tmp_path) == {'discord': True}                    # the page never sees the webhook
+
+
+def test_ocr_reader_per_os(monkeypatch):
+    from lens import text
+    monkeypatch.setattr(text.sys, 'platform', 'win32')
+    monkeypatch.setattr(text.shutil, 'which', lambda n: r'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' if n == 'powershell' else None)
+    cmd = text.ocr_binary()
+    assert cmd[0].endswith('powershell.exe') and cmd[-1] == str(text.PS1) and text.PS1.exists()
+    monkeypatch.setattr(text.sys, 'platform', 'linux')
+    assert text.ocr_binary() is None
+    one = {'text': 'DIVE', 'x': .1, 'y': .2, 'w': .3, 'h': .04}
+    assert text.boxes({'lines': [one, one]}) == [('DIVE', .1, .2, .3, .04)] * 2
+    assert text.boxes({'lines': one}) == [('DIVE', .1, .2, .3, .04)]          # PowerShell's one-line list
+    assert text.boxes({'lines': None}) == []

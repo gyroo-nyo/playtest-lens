@@ -100,9 +100,9 @@ def write(root, ev, meta, logs, touches, make_clip, t0=None, clip_seconds=None):
         except Exception:
             desc = None            # the report still names taps by position
     if desc:
-        (folder / 'describe.json').write_text(json.dumps(desc))
-    (folder / 'logcat.txt').write_text('\n'.join(line for _, line in logs) + '\n')
-    (folder / 'touches.jsonl').write_text(''.join(json.dumps({'host_ts': round(ts, 3), **t}) + '\n' for ts, t in touches))
+        (folder / 'describe.json').write_text(json.dumps(desc), encoding='utf-8')
+    (folder / 'logcat.txt').write_text('\n'.join(line for _, line in logs) + '\n', encoding='utf-8')
+    (folder / 'touches.jsonl').write_text(''.join(json.dumps({'host_ts': round(ts, 3), **t}) + '\n' for ts, t in touches), encoding='utf-8')
     update(folder, ev, meta, touches, has_clip, t0, clip_seconds)
     return folder
 
@@ -112,24 +112,24 @@ def update(folder, ev, meta, touches, has_clip=True, t0=None, clip_seconds=None)
     folder = Path(folder)
     (folder / 'meta.json').write_text(json.dumps({**meta, 'kind': ev.kind, 'time': stamp(ev.ts), 'title': title(ev),
                                                   'note': ev.note, 'matched_lines': ev.lines, 'clip': has_clip,
-                                                  'clip_start': t0, 'clip_seconds': clip_seconds}, indent=2))
+                                                  'clip_start': t0, 'clip_seconds': clip_seconds}, indent=2), encoding='utf-8')
     saved = folder / 'describe.json'
-    desc = json.loads(saved.read_text()) if saved.exists() else None
+    desc = json.loads(saved.read_text(encoding='utf-8')) if saved.exists() else None
     drafted = folder / 'ai.json'
-    ai = json.loads(drafted.read_text()) if drafted.exists() else None
+    ai = json.loads(drafted.read_text(encoding='utf-8')) if drafted.exists() else None
     if not (folder / 'report.edited.md').exists():       # never overwrite what the tester wrote
-        (folder / 'report.md').write_text(report(ev, meta, touches, folder, t0, clip_seconds, desc, ai))
+        (folder / 'report.md').write_text(report(ev, meta, touches, folder, t0, clip_seconds, desc, ai), encoding='utf-8')
 
 
 def load(folder):
     """(Event, meta, touches) back from a bug folder on disk."""
     from .logcat import Event
     folder = Path(folder)
-    m = json.loads((folder / 'meta.json').read_text())
+    m = json.loads((folder / 'meta.json').read_text(encoding='utf-8'))
     ts = time.mktime(time.strptime(m['time'], '%Y-%m-%d %H:%M:%S'))
     ev = Event(m['kind'], ts, lines=m.get('matched_lines') or [], note=m.get('note') or '')
     touches_file = folder / 'touches.jsonl'
-    touches = [(t['host_ts'], t) for t in map(json.loads, touches_file.read_text().splitlines())] if touches_file.exists() else []
+    touches = [(t['host_ts'], t) for t in map(json.loads, touches_file.read_text(encoding='utf-8').splitlines())] if touches_file.exists() else []
     meta = {k: m[k] for k in ('model', 'android', 'package', 'game_version', 'serial') if k in m}
     return ev, meta, touches, m
 
@@ -145,7 +145,7 @@ def rebuild(folder):
         from . import describe
         desc = describe.describe(folder / 'clip.mp4', touches, t0, ev.ts - t0)
         if desc:
-            (folder / 'describe.json').write_text(json.dumps(desc))
+            (folder / 'describe.json').write_text(json.dumps(desc), encoding='utf-8')
     update(folder, ev, meta, touches, has_clip, t0, length)
 
 
@@ -158,14 +158,14 @@ def listing(root):
 
     def row(folder):
         try:
-            m = json.loads((folder / 'meta.json').read_text())
+            m = json.loads((folder / 'meta.json').read_text(encoding='utf-8'))
         except (OSError, ValueError):
             return None
         d = folder / 'describe.json'
-        desc = json.loads(d.read_text()) if d.exists() else {}
+        desc = json.loads(d.read_text(encoding='utf-8')) if d.exists() else {}
         return {'id': folder.name, 'kind': m.get('kind', 'manual'), 'time': m.get('time', ''), 'title': m.get('title', ''),
                 'note': m.get('note') or '', 'clip': (folder / 'clip.mp4').exists(), 'full': (folder / 'full.mp4').exists(),
-                'clip_seconds': m.get('clip_seconds'), 'situation': desc.get('situation', ''), 'summary': desc.get('summary', '')}
+                'clip_seconds': m.get('clip_seconds'), 'sent': (folder / 'discord.json').exists(), 'situation': desc.get('situation', ''), 'summary': desc.get('summary', '')}
 
     def rows(where):
         found = [row(f) for f in where.iterdir() if f.is_dir() and not f.name.startswith(('_', '.'))] if where.exists() else []
@@ -209,8 +209,8 @@ def save_report(root, bug_id, text):
     folder = find(root, bug_id)
     if not folder:
         return False
-    (folder / 'report.md').write_text(text)
-    (folder / 'report.edited.md').write_text(text)
+    (folder / 'report.md').write_text(text, encoding='utf-8')
+    (folder / 'report.edited.md').write_text(text, encoding='utf-8')
     return True
 
 
@@ -236,11 +236,11 @@ def write_with_ai(root, bug_id):
     if ev.kind == 'manual' and len(ev.note.split()) < 3:
         return {'error': 'note'}      # "error" isn't enough to go on: the model would make the bug up
     d = folder / 'describe.json'
-    desc = json.loads(d.read_text()) if d.exists() else None
+    desc = json.loads(d.read_text(encoding='utf-8')) if d.exists() else None
     ai = writer.draft(writer.facts(KIND_LABEL[ev.kind], title(ev), ev.note, meta, desc, ev.lines))
     if not ai:
         return None
-    (folder / 'ai.json').write_text(json.dumps(ai, indent=2))
+    (folder / 'ai.json').write_text(json.dumps(ai, indent=2), encoding='utf-8')
     (folder / 'report.edited.md').unlink(missing_ok=True)   # asked for a new draft: replace the old text
     update(folder, ev, meta, touches, (folder / 'clip.mp4').exists(), m.get('clip_start'), m.get('clip_seconds'))
     return ai

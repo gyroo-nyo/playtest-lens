@@ -81,8 +81,8 @@ def write(readings, t0, t1, folder):
             cache[text] = folder / f'meter{len(cache)}.ppm'
             cache[text].write_bytes(ppm(text, color(fps)))
         end = steps[i + 1][0] if i + 1 < len(steps) else t1 - t0
-        lines.append(f"file '{cache[text]}'\nduration {max(0.04, end - at):.2f}\n")
-    lines.append(f"file '{cache[label(steps[-1][1])]}'\n")   # concat needs the last image twice
+        lines.append(f"file '{cache[text].as_posix()}'\nduration {max(0.04, end - at):.2f}\n")
+    lines.append(f"file '{cache[label(steps[-1][1])].as_posix()}'\n")   # concat needs the last image twice
     listing = folder / 'meter.txt'
-    listing.write_text(''.join(lines))
+    listing.write_text(''.join(lines), encoding='utf-8')
     return listing

@@ -6,6 +6,7 @@ import sys
 import tempfile
 import threading
 import time
+import webbrowser
 from pathlib import Path
 
 from . import adb, bugs, freeze, glitch, lag, logcat, marks, text, ui, video
@@ -34,7 +35,7 @@ class stream:
         while not self.stopped.is_set():
             # stdin=DEVNULL: `adb shell` forwards whatever you type to the phone, which ate the "m <note>" you typed.
             self.p = subprocess.Popen(['adb', *self.args], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                      stderr=subprocess.DEVNULL, text=True, errors='replace', bufsize=1)
+                                      stderr=subprocess.DEVNULL, text=True, encoding='utf-8', errors='replace', bufsize=1)
             for line in self.p.stdout:
                 self.on_line(time.time(), line)
             self.p.wait()
@@ -47,8 +48,8 @@ class stream:
 
 
 def open_page(url, a):
-    if sys.platform == 'darwin' and not a.no_open:
-        subprocess.run(['open', url], stdin=subprocess.DEVNULL)
+    if not a.no_open:
+        webbrowser.open(url)      # the default browser, on macOS, Windows and Linux
 
 
 def cmd_watch(a):
@@ -220,7 +221,7 @@ def cmd_watch(a):
         words, shot, last = text.Detector(), Path(tempfile.mkdtemp(prefix='lens-ocr-')) / 'frame.png', None
         looks = glitch.Detector()
         if not text.ocr_binary():
-            print('Text-bug check off: needs swiftc (Xcode command line tools).', flush=True)
+            print('Text-bug check off: needs swiftc on a Mac (Xcode command line tools) or Windows PowerShell.', flush=True)
             return
         while True:
             time.sleep(3)
@@ -300,7 +301,7 @@ def remember_package(package):
     s = ui.settings(BUGS)
     if s.get('package') != package:
         BUGS.mkdir(parents=True, exist_ok=True)
-        ui.settings_path(BUGS).write_text(json.dumps({**s, 'package': package}, indent=2))
+        ui.settings_path(BUGS).write_text(json.dumps({**s, 'package': package}, indent=2), encoding='utf-8')
 
 
 def main(argv=None):

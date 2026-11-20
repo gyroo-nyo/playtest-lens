@@ -29,7 +29,7 @@ phone ──adb──▶ capture ──▶ ring buffer (30 s: video, touches, lo
 | Freeze | video + `getevent` + `logcat` | 3+ taps, the **whole** screen unchanged for 3 s (Show-taps dots ignored) **and** the game's own frame rate (BufferQueueProducer `queueBuffer: fps=` for its surface) under 2 fps. Video alone flagged GFL's pre-snap screen. No frame-rate log on a phone = no auto freeze reports. Stuck buttons are left to manual marks (a dead spot and a broken button look the same). `x` + Enter files a wrong catch under `bugs/_false_alarms/` |
 | Frame drops | `logcat` (BufferQueueProducer `queueBuffer: fps= … max=` for the game's surface) | 2+ readings in a row under 30 fps **with a stutter** (a frame ≥ 250 ms). GFL's play-calling screen runs a steady 15 fps on purpose, so slow alone isn't lag. Replayed on 452 real readings: one catch, the 3.2 s hitch opening the controls editor |
 | Visual glitch | the full-size frame the text check takes every 3 s (game in front and drawing) | ≥ 4% of the screen solid missing-texture magenta. Black is not checked: GFL goes black on purpose (loading, play calling, lock screen). 1,120 real frames: 0 hits. A vision-model confirm can come later, once there's a real positive example |
-| Text bug | macOS Vision OCR (`lens/ocr/ocr.swift`, built once with swiftc) on a full-size frame every 3 s, only while the game is on screen and drawing | raw string keys (`MENU_START_TITLE`), unfilled placeholders (`{0}`, `%s`), `null`/`undefined`/`NaN`, `#MISSING`/`???`; each string once per session. 265 real GFL frames: no false hits (the only hits were a WhatsApp chat, now skipped). Cut-off text: later |
+| Text bug | macOS Vision OCR (`lens/ocr/ocr.swift`, built once with swiftc) or Windows' built-in OCR (`lens/ocr/ocr.ps1`, Windows.Media.Ocr through PowerShell 5.1) on a full-size frame every 3 s, only while the game is on screen and drawing | raw string keys (`MENU_START_TITLE`), unfilled placeholders (`{0}`, `%s`), `null`/`undefined`/`NaN`, `#MISSING`/`???`; each string once per session. 265 real GFL frames: no false hits (the only hits were a WhatsApp chat, now skipped). Cut-off text: later |
 | **Anything else** | **you** | **hotkey or "Mark bug" button + one line of text or voice** |
 
 ## Manual marks (bugs the detectors missed)
@@ -57,7 +57,7 @@ Touches are recorded from `adb shell getevent` with timestamps and replayed with
 
 ## Stack
 
-- **Core:** Python 3.12, adb (no root), ffmpeg, macOS Vision for text (a small Swift helper), `pynput` for the hotkey
+- **Core:** Python 3.12, adb (no root), ffmpeg, macOS Vision or Windows OCR for text (a small Swift or PowerShell helper), `pynput` for the hotkey. All text files and process output are read and written as UTF-8, so Windows code pages never garble logs or notes
 - **Video:** `adb exec-out screenrecord` (or scrcpy) piped through ffmpeg into a segmented ring buffer
 - **Models:** Ollama on the Mac for report drafts (cloud models skipped); Whisper for voice notes later
 - **Dashboard:** standard-library `http.server` + one HTML page (`lens/web/index.html`, no build step, no new packages) on 127.0.0.1:8737: live view, bug feed, clip player with tap ticks, report editor, log view, export. Chosen over FastAPI + React to keep it $0, offline and dependency-free
