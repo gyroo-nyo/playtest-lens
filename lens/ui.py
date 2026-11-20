@@ -14,10 +14,11 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import bugs
+from . import bugs, discord
 
 PAGE = Path(__file__).parent / 'web' / 'index.html'
 FILES = {'clip.mp4', 'full.mp4', 'moment.jpg'}
+PUBLIC = ('github_repo', 'package')   # settings the page may see; the Discord webhook is a secret
 PORT = 8737
 
 
@@ -57,6 +58,18 @@ def settings(root):
         return {}
 
 
+def public(root):
+    s = settings(root)
+    return {**{k: s[k] for k in PUBLIC if k in s}, 'discord': bool(s.get('discord_webhook'))}
+
+
+def save_settings(root, **changes):
+    s = {**settings(root), **changes}
+    settings_path(root).parent.mkdir(parents=True, exist_ok=True)
+    settings_path(root).write_text(json.dumps(s, indent=2))
+    return s
+
+
 def issue_url(repo, report_md):
     """A prefilled 'new issue' page on GitHub. Nothing is posted: the tester reviews and submits it."""
     if not re.fullmatch(r'[\w.-]+/[\w.-]+', repo or ''):
@@ -90,6 +103,7 @@ def detail(root, bug_id):
         'report': read('report.md') or '', 'edited': (folder / 'report.edited.md').exists(),
         'describe': json.loads(read('describe.json') or 'null'), 'ai': json.loads(read('ai.json') or 'null'),
         'files': sorted(n for n in FILES if (folder / n).exists()),
+        'discord': json.loads(read('discord.json') or 'null'),
         'bug_at': round(ev_ts - t0, 2) if ev_ts and t0 is not None else None, 'taps': taps,
         'log': [{'text': l, 'hit': any(x and x in l for x in matched)} for l in log],
     }
@@ -157,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, PAGE.read_bytes(), 'text/html; charset=utf-8')
         if path == '/api/state':
             return self.send(200, {'live': self.live.state() if self.live else None, **bugs.listing(self.root),
-                                   'settings': settings(self.root)})
+                                   'settings': public(self.root)})
         if m := re.fullmatch(r'/api/bug/([^/]+)', path):
             d = detail(self.root, urllib.parse.unquote(m.group(1)))
             return self.send(200 if d else 404, d)
@@ -199,14 +213,20 @@ class Handler(BaseHTTPRequestHandler):
             self.live.note(text)
             return self.send(200, {'ok': True})
         if path == '/api/settings':
-            repo = str(body.get('github_repo', '')).strip()
-            if repo and not re.fullmatch(r'[\w.-]+/[\w.-]+', repo):
-                return self.send(400, {'error': 'Use owner/repo, e.g. superfusion/gfl-bugs'})
-            s = {**settings(self.root), 'github_repo': repo}
-            settings_path(self.root).parent.mkdir(parents=True, exist_ok=True)
-            settings_path(self.root).write_text(json.dumps(s, indent=2))
-            return self.send(200, s)
-        m = re.fullmatch(r'/api/bug/([^/]+)/(report|dismiss|restore|rebuild|ai|export)', path)
+            changes = {}
+            if 'github_repo' in body:
+                repo = str(body['github_repo']).strip()
+                if repo and not re.fullmatch(r'[\w.-]+/[\w.-]+', repo):
+                    return self.send(400, {'error': 'Use owner/repo, e.g. superfusion/gfl-bugs'})
+                changes['github_repo'] = repo
+            if 'discord_webhook' in body:
+                hook = str(body['discord_webhook']).strip()
+                if hook and not discord.valid(hook):
+                    return self.send(400, {'error': 'That isn\'t a Discord webhook link. In Discord: channel settings → Integrations → Webhooks → Copy Webhook URL.'})
+                changes['discord_webhook'] = hook
+            save_settings(self.root, **changes)
+            return self.send(200, public(self.root))
+        m = re.fullmatch(r'/api/bug/([^/]+)/(report|dismiss|restore|rebuild|ai|export|discord|discord-text)', path)
         if not m:
             return self.send(404, {'error': 'not found'})
         bug_id, action = urllib.parse.unquote(m.group(1)), m.group(2)
@@ -226,6 +246,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(503, {'error': 'No local model answered. Start Ollama (ollama serve) and pull a model, e.g. ollama pull qwen2.5:7b.'})
             if ai.get('error') == 'note':
                 return self.send(422, {'error': 'Write a note of a few words first: what went wrong? The model only rewrites what you saw.'})
+        elif action == 'discord-text':
+            return self.send(200, {'text': discord.message(bugs.find(self.root, bug_id))})
+        elif action == 'discord':
+            hook = settings(self.root).get('discord_webhook')
+            if not hook:
+                return self.send(409, {'error': 'Paste the channel\'s Discord webhook link first.'})
+            try:
+                discord.send(hook, bugs.find(self.root, bug_id))
+            except ValueError as e:
+                return self.send(502, {'error': str(e)})
         elif action == 'export':
             repo = settings(self.root).get('github_repo')
             url = issue_url(repo, (bugs.find(self.root, bug_id) / 'report.md').read_text())

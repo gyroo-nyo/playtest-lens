@@ -75,9 +75,9 @@
   .tab[aria-selected="true"] { color: var(--primary); background: var(--raised); }
   .feed { list-style: none; margin: 0; padding: 0; overflow-y: auto; max-height: 34vh; min-height: 96px; }
   .row { display: grid; grid-template-columns: 10px 64px 72px 1fr auto; align-items: center; gap: 8px; height: 32px; padding: 0 16px 0 14px;
-         border-left: 2px solid transparent; font-size: 13px; cursor: pointer; }
+         font-size: 13px; cursor: pointer; }
   .row:hover { background: var(--raised); }
-  .row[aria-selected="true"] { background: var(--raised); border-left-color: var(--primary); color: var(--primary); font-weight: 600; }
+  .row[aria-selected="true"] { background: var(--raised); box-shadow: inset 1px 0 0 var(--primary); color: var(--primary); font-weight: 600; }
   .row .dot { width: 4px; height: 4px; border-radius: 9999px; background: var(--tertiary); visibility: hidden; }
   .row.unread .dot { visibility: visible; }
   .row .t, .row .len { font: 400 13px/1 var(--mono); color: var(--secondary); }
@@ -107,8 +107,8 @@
   .moment { max-width: 100%; margin-top: 8px; display: block; }
   textarea.report { width: 100%; min-height: 46vh; resize: vertical; font: 400 13px/1.5 var(--mono); max-width: 100%; }
   .log { font: 400 12px/1.5 var(--mono); background: var(--surface); padding: 12px 0; margin: 0; overflow-x: auto; }
-  .log div { white-space: pre; padding: 0 12px 0 10px; border-left: 2px solid transparent; }
-  .log div.hit { border-left-color: var(--caution); color: var(--primary); }
+  .log div { white-space: pre; padding: 0 12px; }
+  .log div.hit { background: rgba(227,182,72,.10); color: var(--primary); }
   .log span { color: var(--secondary); display: inline-block; width: 4ch; text-align: right; margin-right: 12px; user-select: none; }
   .busy { font: 400 13px/1.45 var(--mono); color: var(--primary); }
   .msg { font: 400 13px/1.45 var(--mono); color: var(--secondary); min-height: 1.45em; }
@@ -121,6 +121,48 @@
   .status .warn { color: var(--caution); }
   .status .keys { margin-left: auto; letter-spacing: .04em; text-transform: none; }
 
+  /* comment later: the mark field becomes the latest mark's comment */
+  .mark-row { flex-direction: column; gap: 6px; }
+  .mark-row .row2 { display: flex; gap: 8px; }
+  .mark-row .row2 input { flex: 1; }
+  .mark-row .hint { font: 400 12px/1.4 var(--mono); color: var(--secondary); margin: 0; }
+  .mark-row.waiting input { border-color: var(--tertiary); }
+  .mark-row.waiting .hint { color: var(--tertiary); }
+
+  /* dialogs: the Discord preview and settings */
+  dialog { background: var(--neutral); color: var(--on-surface); border: 1px solid var(--border); border-radius: 4px; padding: 0;
+           width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 64px); }
+  dialog::backdrop { background: rgba(10, 9, 8, .72); }
+  dialog header { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  dialog header .label { flex: 1; }
+  dialog .body { padding: 16px; display: grid; gap: 16px; overflow-y: auto; }
+  dialog footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }
+  .preview { background: var(--surface); border-radius: 2px; padding: 12px; font: 400 13px/1.5 var(--sans); white-space: pre-wrap; margin: 0;
+             max-height: 40vh; overflow-y: auto; overflow-wrap: anywhere; }
+  .attach { display: flex; gap: 8px; flex-wrap: wrap; font: 400 12px/1.4 var(--mono); color: var(--secondary); margin: 0; }
+  .attach span { background: var(--raised); border-radius: 2px; padding: 4px 8px; }
+  .field-group { display: grid; gap: 6px; }
+  .field-group label { font: 600 13px/1.35 var(--sans); color: var(--primary); }
+  .field-group .help, .field-group .err { font: 400 12px/1.45 var(--sans); color: var(--secondary); margin: 0; }
+  .field-group .err { color: var(--error); }
+  .field-group input { width: 100%; }
+  .saved { color: var(--normal); font: 400 12px/1.4 var(--mono); }
+  .iconbtn { background: none; border: 0; color: var(--secondary); cursor: pointer; padding: 0 4px; height: 100%; font: inherit; letter-spacing: inherit; text-transform: inherit; }
+  .iconbtn:hover { color: var(--primary); }
+
+  /* toasts */
+  .toasts { position: fixed; right: 16px; bottom: 40px; display: grid; gap: 8px; z-index: 10; max-width: min(420px, calc(100vw - 32px)); }
+  .toast { background: var(--raised); color: var(--primary); border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px;
+           font: 400 13px/1.45 var(--sans); box-shadow: 0 6px 18px rgba(0,0,0,.35); animation: toast-in 180ms cubic-bezier(.16,1,.3,1); }
+  .toast.err { border-color: rgba(238,106,98,.5); }
+  .toast.err::before { content: 'Error  '; font: 500 11px/1 var(--mono); letter-spacing: .12em; color: var(--error); }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(6px); } }
+
+  ::selection { background: rgba(242,106,46,.35); color: var(--primary); }
+  * { scrollbar-color: var(--border) transparent; scrollbar-width: thin; }
+  input::placeholder, textarea::placeholder { color: var(--secondary); opacity: 1; }
+  input, textarea { caret-color: var(--tertiary); }
+
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
   @media (max-width: 1100px) {
@@ -130,6 +172,7 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .rec.on i { animation: none; }
+    .toast { animation: none; }
     .btn { transition: none; }
   }
 </style>
@@ -150,9 +193,10 @@
       <div class="frame" id="frame"><span class="b1"></span><span class="b2"></span>
         <p class="empty" id="frameEmpty">Not recording. Plug in the phone and run <br>lens watch superfusion.gfl</p>
       </div>
-      <div class="mark-row">
-        <label class="sr" for="markNote">Note for the bug you mark</label>
-        <input class="field" id="markNote" placeholder="What went wrong? (optional, Enter to mark)" autocomplete="off">
+      <div class="mark-row" id="markRow">
+        <label class="sr" for="markNote" id="markLabel">Mark a bug</label>
+        <div class="row2"><input class="field" id="markNote" placeholder="Enter marks the moment. Type the comment after." autocomplete="off" aria-describedby="markHint"></div>
+        <p class="hint" id="markHint">Enter or F8 saves the last 15 s now. Write what went wrong when you're ready.</p>
       </div>
     </div>
   </section>
@@ -185,6 +229,49 @@
 
 <footer class="status" id="status" aria-label="Status"></footer>
 <div class="sr" aria-live="polite" id="announce"></div>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+<dialog id="discordDlg" aria-labelledby="discordTitle">
+  <header><span class="label" id="discordTitle">Send to Discord</span></header>
+  <div class="body">
+    <pre class="preview" id="discordPreview"></pre>
+    <p class="attach" id="discordAttach"></p>
+    <div class="field-group" id="hookGroup" hidden>
+      <label for="hookInput">Channel webhook link</label>
+      <input class="field" id="hookInput" type="password" autocomplete="off" placeholder="https://discord.com/api/webhooks/…" aria-describedby="hookHelp hookErr">
+      <p class="help" id="hookHelp">In Discord: channel settings → Integrations → Webhooks → New Webhook → Copy Webhook URL. Saved on this Mac only.</p>
+      <p class="err" id="hookErr" hidden></p>
+    </div>
+  </div>
+  <footer>
+    <button class="btn" id="dCancel">Cancel</button>
+    <button class="btn" id="dCopy">Copy text</button>
+    <button class="btn primary" id="dSend">Send to channel</button>
+  </footer>
+</dialog>
+
+<dialog id="settingsDlg" aria-labelledby="settingsTitle">
+  <header><span class="label" id="settingsTitle">Where reports go</span></header>
+  <form class="body" id="settingsForm" method="dialog">
+    <div class="field-group">
+      <label for="sHook">Discord channel webhook</label>
+      <input class="field" id="sHook" type="password" autocomplete="off" placeholder="https://discord.com/api/webhooks/…" aria-describedby="sHookHelp sHookErr">
+      <p class="help" id="sHookHelp">Channel settings → Integrations → Webhooks → Copy Webhook URL. Kept on this Mac; leave empty to keep the saved one.</p>
+      <p class="err" id="sHookErr" hidden></p>
+    </div>
+    <div class="field-group">
+      <label for="sRepo">GitHub repo (optional)</label>
+      <input class="field" id="sRepo" autocomplete="off" placeholder="owner/repo" aria-describedby="sRepoHelp sRepoErr">
+      <p class="help" id="sRepoHelp">For Open GitHub issue. GitHub opens a prefilled issue; nothing is posted.</p>
+      <p class="err" id="sRepoErr" hidden></p>
+    </div>
+  </form>
+  <footer>
+    <button class="btn" id="sForget" hidden>Forget webhook</button>
+    <button class="btn" id="sCancel">Cancel</button>
+    <button class="btn primary" id="sSave">Save</button>
+  </footer>
+</dialog>
 
 <script>
 const $ = s => document.querySelector(s);
@@ -217,6 +304,7 @@ async function refresh() {
 
 function renderLive() {
   const L = state.live;
+  if (document.activeElement !== $('#markNote') || !$('#markNote').value) renderMarkRow();
   $('#rec').classList.toggle('on', !!(L && L.connected));
   $('#markBtn').disabled = !L;
   $('#markNote').disabled = !L;
@@ -289,15 +377,17 @@ function renderDetail() {
       ${d.situation ? `<dt>On screen</dt><dd>${esc(d.situation)}</dd>` : ''}
       ${d.summary ? `<dt>Pressed</dt><dd>${esc(d.summary)}</dd>` : ''}
       <dt>Device</dt><dd>${esc(m.model)} · Android ${esc(m.android)} · ${esc(m.package)} ${esc(m.game_version)}</dd>
+      ${bug.discord ? `<dt>Discord</dt><dd class="saved">Sent ${esc(bug.discord.sent)}</dd>` : ''}
     </dl>
     <div class="actions">
-      <button class="btn primary" id="aExport" title="Open a prefilled GitHub issue (E)">Open GitHub issue <kbd>E</kbd></button>
+      <button class="btn primary" id="aDiscord" title="Preview and send to the Discord channel (D)">Send to Discord <kbd>D</kbd></button>
       <button class="btn" id="aCopy" title="Copy the report as Markdown (C)">Copy Markdown <kbd>C</kbd></button>
+      <button class="btn" id="aExport" title="Open a prefilled GitHub issue (E)">GitHub issue <kbd>E</kbd></button>
       <button class="btn" id="aAi" title="Rewrite the report with the local model (A)">Write with AI <kbd>A</kbd></button>
       ${bug.false_alarm ? `<button class="btn" id="aRestore">Not a false alarm</button>`
                         : `<button class="btn" id="aDismiss" title="Move to false alarms (X)">False alarm <kbd>X</kbd></button>`}
     </div>
-    <p class="msg" id="msg" role="status"></p>`;
+`;
   let main = '';
   if (view === 'clip') {
     if (!bug.files.length) main = '<p class="none">No video for this bug: the phone was disconnected or the screen was off.</p>';
@@ -342,10 +432,15 @@ function wireDetail() {
   }
   document.querySelectorAll('[data-clip]').forEach(b => b.onclick = () => { clipName = b.dataset.clip; renderDetail(); });
   const on = (sel, fn) => { const el = $(sel); if (el) el.onclick = fn; };
-  on('#aExport', exportIssue); on('#aCopy', copyMd); on('#aAi', writeAi); on('#aDismiss', () => act('dismiss')); on('#aRestore', () => act('restore')); on('#aSave', saveReport);
+  on('#aDiscord', openDiscord); on('#aExport', exportIssue); on('#aCopy', copyMd); on('#aAi', writeAi); on('#aDismiss', () => act('dismiss')); on('#aRestore', () => act('restore')); on('#aSave', saveReport);
 }
 
-function msg(text, err) { const m = $('#msg'); if (m) { m.textContent = text; m.className = 'msg' + (err ? ' err' : ''); } }
+function msg(text, err) {
+  const t = document.createElement('div'); t.className = 'toast' + (err ? ' err' : ''); t.textContent = text;
+  $('#toasts').appendChild(t);
+  setTimeout(() => t.remove(), err ? 7000 : 4000);
+  while ($('#toasts').children.length > 3) $('#toasts').firstChild.remove();
+}
 
 async function act(what) {
   const res = await post(`/api/bug/${encodeURIComponent(bug.id)}/${what}`);
@@ -366,10 +461,10 @@ async function saveReport() {
 
 async function writeAi() {
   if (bug.edited && !confirm('Replace your edited report with a new AI draft? Your edits will be lost.')) return;
-  const b = $('#aAi'); b.disabled = true; b.setAttribute('aria-busy', 'true'); msg('WRITING… the local model takes 5–30 s.');
+  const b = $('#aAi'); b.disabled = true; b.setAttribute('aria-busy', 'true'); b.textContent = 'Writing…'; msg('The local model takes 5–30 s.');
   const res = await post(`/api/bug/${encodeURIComponent(bug.id)}/ai`);
   const out = await res.json();
-  if (!res.ok) { b.disabled = false; return msg(out.error, true); }
+  if (!res.ok) { renderDetail(); return msg(out.error, true); }
   bug = out; await refresh(); setView('report'); msg('Draft written. Check it against the clip before sending.');
 }
 
@@ -382,11 +477,7 @@ async function copyMd() {
 async function exportIssue() {
   let res = await post(`/api/bug/${encodeURIComponent(bug.id)}/export`);
   if (res.status === 409) {
-    const repo = prompt('Which GitHub repo do bugs go to? (owner/repo)\nNothing is posted: GitHub opens a prefilled issue for you to check and submit.', state.settings.github_repo || '');
-    if (!repo) return;
-    const s = await post('/api/settings', {github_repo: repo});
-    if (!s.ok) return msg((await s.json()).error, true);
-    state.settings.github_repo = repo;
+    if (!await openSettings('sRepo')) return;
     res = await post(`/api/bug/${encodeURIComponent(bug.id)}/export`);
   }
   const out = await res.json();
@@ -397,10 +488,88 @@ async function exportIssue() {
 
 async function mark() {
   if (!state || !state.live) return;
-  const note = $('#markNote').value.trim();
-  const res = await post('/api/mark', {note});
+  const res = await post('/api/mark', {note: ''});
+  if (!res.ok) return msg('Not recording.', true);
+  state.live.waiting_note = new Date().toTimeString().slice(0, 8);
+  renderMarkRow(); $('#markNote').focus();
+  msg(`Marked ${state.live.waiting_note}. The clip covers the 12 s before.`);
+}
+
+async function submitMark() {
+  const text = $('#markNote').value.trim();
+  if (!text) return mark();                          // Enter alone: mark now
+  const waiting = state && state.live && state.live.waiting_note;
+  const res = waiting ? await post('/api/note', {text}) : await post('/api/mark', {note: text});
+  if (!res.ok) return msg((await res.json()).error || 'Not recording.', true);
   $('#markNote').value = '';
-  $('#announce').textContent = res.ok ? 'Bug marked. The clip is saved in a few seconds.' : 'Not recording.';
+  if (waiting) { state.live.waiting_note = null; msg(`Comment added to the ${waiting} mark.`); }
+  else msg('Marked with your comment.');
+  renderMarkRow();
+}
+
+function renderMarkRow() {
+  const L = state && state.live, w = L && L.waiting_note;
+  $('#markRow').classList.toggle('waiting', !!w);
+  $('#markLabel').textContent = w ? `Comment for the ${w} mark` : 'Mark a bug';
+  $('#markNote').placeholder = w ? `What went wrong at ${w}? Enter saves the comment.` : 'Enter marks the moment. Type the comment after.';
+  $('#markHint').textContent = !L ? 'Marking works while lens is recording.'
+    : w ? `Marked ${w}: the clip is safe. Take your time; an empty Enter marks another moment.`
+        : 'Enter or F8 saves the last 15 s now. Write what went wrong when you\u2019re ready.';
+}
+
+async function openDiscord() {
+  if (!bug) return;
+  const res = await post(`/api/bug/${encodeURIComponent(bug.id)}/discord-text`);
+  if (!res.ok) return msg('Couldn\u2019t build the message.', true);
+  $('#discordPreview').textContent = (await res.json()).text;
+  const files = [bug.files.includes('clip.mp4') && 'clip.mp4 (made smaller for Discord)', bug.files.includes('moment.jpg') && 'moment.jpg'].filter(Boolean);
+  $('#discordAttach').innerHTML = files.length ? files.map(f => `<span>${esc(f)}</span>`).join('') : '<span>No clip or picture for this bug</span>';
+  $('#hookGroup').hidden = state.settings.discord; $('#hookErr').hidden = true; $('#hookInput').value = '';
+  $('#dSend').disabled = false; $('#dSend').textContent = bug.discord ? 'Send again' : 'Send to channel';
+  $('#discordDlg').showModal();
+  (state.settings.discord ? $('#dSend') : $('#hookInput')).focus();
+}
+
+async function sendDiscord() {
+  const btn = $('#dSend');
+  if (!state.settings.discord) {
+    const hook = $('#hookInput').value.trim();
+    const s = await post('/api/settings', {discord_webhook: hook});
+    const out = await s.json();
+    if (!s.ok || !hook) { $('#hookErr').textContent = hook ? out.error : 'Paste the webhook link first.'; $('#hookErr').hidden = false; $('#hookInput').focus(); return; }
+    state.settings = out;
+  }
+  btn.disabled = true; btn.setAttribute('aria-busy', 'true'); btn.textContent = 'Sending…';
+  const res = await post(`/api/bug/${encodeURIComponent(bug.id)}/discord`);
+  const out = await res.json();
+  btn.removeAttribute('aria-busy');
+  if (!res.ok) { btn.disabled = false; btn.textContent = 'Try again'; return msg(out.error, true); }
+  $('#discordDlg').close(); bug = out; renderDetail(); msg('Sent to Discord.');
+}
+
+function openSettings(focusId) {
+  return new Promise(done => {
+    const d = $('#settingsDlg');
+    $('#sHook').value = ''; $('#sRepo').value = state.settings.github_repo || '';
+    $('#sHook').placeholder = state.settings.discord ? 'Saved. Paste a new link to replace it.' : 'https://discord.com/api/webhooks/…';
+    $('#sForget').hidden = !state.settings.discord;
+    ['#sHookErr', '#sRepoErr'].forEach(e => $(e).hidden = true);
+    const finish = ok => { d.close(); done(ok); };
+    $('#sCancel').onclick = () => finish(false);
+    d.oncancel = () => done(false);
+    $('#sForget').onclick = async () => { const r = await post('/api/settings', {discord_webhook: ''}); state.settings = await r.json(); msg('Webhook forgotten.'); finish(false); };
+    $('#sSave').onclick = async () => {
+      const body = {github_repo: $('#sRepo').value.trim()};
+      if ($('#sHook').value.trim()) body.discord_webhook = $('#sHook').value.trim();
+      const r = await post('/api/settings', body); const out = await r.json();
+      if (!r.ok) {
+        const which = body.discord_webhook && /Discord/.test(out.error) ? 'sHook' : 'sRepo';
+        $('#' + which + 'Err').textContent = out.error; $('#' + which + 'Err').hidden = false; $('#' + which).focus(); return;
+      }
+      state.settings = out; status(state); msg('Saved.'); finish(true);
+    };
+    d.showModal(); $('#' + (focusId || 'sHook')).focus();
+  });
 }
 
 function status(s, down) {
@@ -410,10 +579,12 @@ function status(s, down) {
   el.innerHTML = `
     ${L ? `<span class="${L.connected ? 'ok' : 'warn'}">${L.connected ? 'Phone connected' : 'Phone disconnected'}</span>
            <span>${esc(L.model)}</span><span>${esc(L.package)} ${esc(L.version)}</span>
-           <span>FPS ${L.fps != null ? Math.round(L.fps) : '--'}</span><span>Buffer 30 s</span>`
+           <span>Buffer 30 s</span>`
         : `<span>Not recording</span><span>${s.bugs.length} bugs on disk</span>`}
-    <span>Reports: ${s.settings.github_repo ? 'GitHub ' + esc(s.settings.github_repo) : 'Markdown'}</span>
-    <span class="keys">J/K bugs · 1 2 3 views · E issue · A AI · X false alarm · F8 mark</span>`;
+    <span>Reports: ${s.settings.discord ? 'Discord' : 'Discord not set'}${s.settings.github_repo ? ' · GitHub ' + esc(s.settings.github_repo) : ''}</span>
+    <button class="iconbtn" id="openSettings" title="Where reports go">Settings</button>
+    <span class="keys">J/K · 1 2 3 · D Discord · A AI · X false</span>`;
+  $('#openSettings').onclick = () => openSettings();
 }
 
 function move(delta) {
@@ -425,13 +596,14 @@ function move(delta) {
 
 document.addEventListener('keydown', e => {
   const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
+  if ($('dialog[open]')) return;                      // dialogs keep their own keys
   if (e.key === 'F8') { e.preventDefault(); return mark(); }
   if ((e.metaKey || e.ctrlKey) && e.key === 's' && view === 'report' && bug) { e.preventDefault(); return saveReport(); }
   if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
   const k = e.key.toLowerCase();
   if (k === 'j') move(1); else if (k === 'k') move(-1);
   else if (k === '1') setView('clip'); else if (k === '2') setView('report'); else if (k === '3') setView('log');
-  else if (bug && k === 'e') exportIssue(); else if (bug && k === 'c') copyMd(); else if (bug && k === 'a') writeAi();
+  else if (bug && k === 'd') openDiscord(); else if (bug && k === 'e') exportIssue(); else if (bug && k === 'c') copyMd(); else if (bug && k === 'a') writeAi();
   else if (bug && k === 'x' && !bug.false_alarm) act('dismiss');
   else return;
   e.preventDefault();
@@ -441,7 +613,14 @@ $('#tabBugs').onclick = () => { list = 'bugs'; renderFeed(); };
 $('#tabFalse').onclick = () => { list = 'false'; renderFeed(); };
 document.querySelectorAll('[data-view]').forEach(t => t.onclick = () => setView(t.dataset.view));
 $('#markBtn').onclick = mark;
-$('#markNote').addEventListener('keydown', e => { if (e.key === 'Enter') mark(); });
+$('#markNote').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitMark(); } });
+$('#dCancel').onclick = () => $('#discordDlg').close();
+$('#dSend').onclick = sendDiscord;
+$('#hookInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendDiscord(); });
+$('#dCopy').onclick = async () => {
+  try { await navigator.clipboard.writeText($('#discordPreview').textContent); msg('Copied. Paste it in Discord and drag in clip.mp4.'); }
+  catch { msg('Couldn\u2019t reach the clipboard. Select the text and copy it.', true); }
+};
 
 refresh().then(() => {
   const h = new URLSearchParams(location.hash.slice(1));

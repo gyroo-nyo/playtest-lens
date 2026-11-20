@@ -47,7 +47,7 @@ Written by a local model (Ollama) from: your note, the touch log mapped to on-sc
 the log lines around the moment, device + game version.
 
 - Title, severity guess, steps to reproduce, expected vs actual, environment, attachments (clip, logs)
-- Export: Markdown, Jira (CSV / API), GitHub issue
+- Export: Discord (a channel webhook, the tester presses Send after a preview; the clip re-encoded under 10 MB), Markdown, GitHub issue (prefilled page); Jira later
 - You edit it before export; nothing is sent anywhere unless you export it
 
 ## Replay
@@ -92,8 +92,8 @@ crashes, listens for the F8 mark, and writes one folder per bug.
 - **Crash detector:** lines from the game's process matching `FATAL EXCEPTION`, `Fatal signal`,
   native crash and tombstone headers, Unity crash lines, `ANR in <package>`, and ActivityManager's
   `Process <package> … has died`. Lines within 3 s of each other are one bug.
-- **Manual mark:** F8 anywhere (pynput global hotkey), or `m` + Enter in the terminal. Then it asks
-  for a one-line note.
+- **Manual mark:** Enter in the terminal, F8 anywhere (pynput global hotkey) or Mark in the dashboard
+  marks at once; the next line typed is that mark's comment, before or after its clip is saved (`lens/marks.py`).
 - **On a catch or mark:** wait for the "after" (3 s, plus the segment still being written), then write
   `bugs/<time>_<kind>/` with `clip.mp4` (-12 s/+3 s, cut from the segments, with Android's "Show taps" dots and an FPS meter in the top-left from the game's frame-rate log), `moment.jpg` (the frame at the bug), `describe.json` (each tap named by the text under the finger, read with Vision: `DIVE ×5, SWITCH ×5`; drags and holds; the scoreboard along the top: `SECOND DOWN AND 11 · 1:45 Q2 · DALLAS · 13`), `logcat.txt` (60 s
   before + 3 s after), `touches.jsonl`, `meta.json` (device, Android version, game version, kind,
@@ -117,7 +117,7 @@ crashes, listens for the F8 mark, and writes one folder per bug.
 - **Bug:** what was on screen and what was pressed; Clip (15 s clip or the 30 s before, a scrubber with
   tap ticks and the bug in orange, the picture at the bug), Report (editable Markdown; edits survive a
   rebuild, and an AI draft asks before replacing them), Log (matched lines marked).
-- **Actions:** Open GitHub issue (a prefilled new-issue page on the repo you set; nothing is posted, clips are
+- **Actions:** Send to Discord (preview dialog, webhook kept in the gitignored `bugs/.lens.json` and never sent to the page), Open GitHub issue (a prefilled new-issue page on the repo you set; nothing is posted, clips are
   attached by hand), Copy Markdown, Write with AI (local Ollama; needs a 3+ word note), False alarm.
 - **Safety:** 127.0.0.1 only, and only requests addressed to it (no DNS rebinding); files only from inside `bugs/`; POSTs need the page's `X-Lens` header; HTTP
   Range so Safari plays clips.

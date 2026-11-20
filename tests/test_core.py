@@ -446,3 +446,25 @@ def test_simple_command(monkeypatch, tmp_path):
         cli.simple([])                                            # no game yet: says how to start
     cli.remember_package('superfusion.gfl')
     assert cli.simple([]) == ['watch', 'superfusion.gfl']
+
+
+def test_discord_message_and_send(tmp_path):
+    from lens import discord, ui
+    meta = {'model': 'Infinix X6870', 'android': '16', 'package': PKG, 'game_version': '1.2', 'serial': 'X'}
+    folder = bugs.write(tmp_path, Event('manual', 1763561000.0, note='Kicker freezes mid-kick'), meta, [], [], lambda out: False)
+    (folder / 'describe.json').write_text(json.dumps({'did': [], 'summary': 'DIVE ×5', 'situation': 'SECOND DOWN AND 11'}))
+    text = discord.message(folder)
+    assert text.startswith('**[') and 'Kicker freezes mid-kick' in text and 'SECOND DOWN AND 11' in text and len(text) <= 2000
+    (folder / 'moment.jpg').write_bytes(b'\xff\xd8jpeg')
+    hook = 'https://discord.com/api/webhooks/123/abc-DEF_9'
+    assert discord.valid(hook) and not discord.valid('https://evil.example/api/webhooks/1/x')
+    sent = []
+    out = discord.send(hook, folder, lambda url, body, kind: sent.append((url, body, kind)) or (200, b'{}'))
+    url, body, kind = sent[0]
+    assert url == hook + '?wait=true' and kind.startswith('multipart/form-data') and b'Kicker freezes' in body and b'moment.jpg' in body
+    assert out['files'] == ['moment.jpg'] and (folder / 'discord.json').exists()
+    import pytest
+    with pytest.raises(ValueError):
+        discord.send(hook, folder, lambda *a: (404, b''))
+    ui.save_settings(tmp_path, discord_webhook=hook)
+    assert ui.public(tmp_path) == {'discord': True}                    # the page never sees the webhook
