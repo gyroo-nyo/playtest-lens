@@ -120,6 +120,7 @@
   .status .ok { color: var(--normal); }
   .status .warn { color: var(--caution); }
   .status .keys { margin-left: auto; letter-spacing: .04em; text-transform: none; }
+  @media (max-width: 1100px) { .status .keys { display: none; } }
 
   /* comment later: the mark field becomes the latest mark's comment */
   .mark-row { flex-direction: column; gap: 6px; }
@@ -132,7 +133,7 @@
   /* dialogs: the Discord preview and settings */
   dialog { background: var(--neutral); color: var(--on-surface); border: 1px solid var(--border); border-radius: 4px; padding: 0;
            width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 64px); }
-  dialog::backdrop { background: rgba(10, 9, 8, .72); }
+  dialog::backdrop { background: rgba(20, 19, 17, .8); }   /* surface, 80% */
   dialog header { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
   dialog header .label { flex: 1; }
   dialog .body { padding: 16px; display: grid; gap: 16px; overflow-y: auto; }
@@ -153,7 +154,7 @@
   /* toasts */
   .toasts { position: fixed; right: 16px; bottom: 40px; display: grid; gap: 8px; z-index: 10; max-width: min(420px, calc(100vw - 32px)); }
   .toast { background: var(--raised); color: var(--primary); border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px;
-           font: 400 13px/1.45 var(--sans); box-shadow: 0 6px 18px rgba(0,0,0,.35); animation: toast-in 180ms cubic-bezier(.16,1,.3,1); }
+           font: 400 13px/1.45 var(--sans); animation: toast-in 180ms cubic-bezier(.16,1,.3,1); }
   .toast.err { border-color: rgba(238,106,98,.5); }
   .toast.err::before { content: 'Error  '; font: 500 11px/1 var(--mono); letter-spacing: .12em; color: var(--error); }
   @keyframes toast-in { from { opacity: 0; transform: translateY(6px); } }
@@ -577,12 +578,12 @@ function status(s, down) {
   if (down) { el.innerHTML = '<span class="warn">Dashboard lost: is Lens still running?</span>'; return; }
   const L = s.live;
   el.innerHTML = `
+    <button class="iconbtn" id="openSettings" title="Where reports go">Settings</button>
     ${L ? `<span class="${L.connected ? 'ok' : 'warn'}">${L.connected ? 'Phone connected' : 'Phone disconnected'}</span>
            <span>${esc(L.model)}</span><span>${esc(L.package)} ${esc(L.version)}</span>
            <span>Buffer 30 s</span>`
         : `<span>Not recording</span><span>${s.bugs.length} bugs on disk</span>`}
     <span>Reports: ${s.settings.discord ? 'Discord' : 'Discord not set'}${s.settings.github_repo ? ' · GitHub ' + esc(s.settings.github_repo) : ''}</span>
-    <button class="iconbtn" id="openSettings" title="Where reports go">Settings</button>
     <span class="keys">J/K · 1 2 3 · D Discord · A AI · X false</span>`;
   $('#openSettings').onclick = () => openSettings();
 }
@@ -618,8 +619,13 @@ $('#dCancel').onclick = () => $('#discordDlg').close();
 $('#dSend').onclick = sendDiscord;
 $('#hookInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendDiscord(); });
 $('#dCopy').onclick = async () => {
-  try { await navigator.clipboard.writeText($('#discordPreview').textContent); msg('Copied. Paste it in Discord and drag in clip.mp4.'); }
-  catch { msg('Couldn\u2019t reach the clipboard. Select the text and copy it.', true); }
+  try { await navigator.clipboard.writeText($('#discordPreview').textContent); }
+  catch { return msg('Couldn\u2019t reach the clipboard. Select the text and copy it.', true); }
+  if (!bug.files.includes('clip.mp4')) return msg('Copied. Paste it in Discord.');
+  msg('Copied. Making a clip small enough for Discord…');
+  const r = await post(`/api/bug/${encodeURIComponent(bug.id)}/discord-clip`, {reveal: true});
+  const out = await r.json();
+  msg(r.ok ? `Finder is showing ${out.file} (${out.mb} MB): paste the text in Discord and drag it in.` : out.error, !r.ok);
 };
 
 refresh().then(() => {

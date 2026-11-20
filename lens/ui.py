@@ -8,6 +8,8 @@ localhost (no DNS rebinding), and only accepts actions sent with the page's own 
 import json
 import mimetypes
 import re
+import subprocess
+import sys
 import threading
 import time
 import urllib.parse
@@ -226,7 +228,7 @@ class Handler(BaseHTTPRequestHandler):
                 changes['discord_webhook'] = hook
             save_settings(self.root, **changes)
             return self.send(200, public(self.root))
-        m = re.fullmatch(r'/api/bug/([^/]+)/(report|dismiss|restore|rebuild|ai|export|discord|discord-text)', path)
+        m = re.fullmatch(r'/api/bug/([^/]+)/(report|dismiss|restore|rebuild|ai|export|discord|discord-text|discord-clip)', path)
         if not m:
             return self.send(404, {'error': 'not found'})
         bug_id, action = urllib.parse.unquote(m.group(1)), m.group(2)
@@ -248,6 +250,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(422, {'error': 'Write a note of a few words first: what went wrong? The model only rewrites what you saw.'})
         elif action == 'discord-text':
             return self.send(200, {'text': discord.message(bugs.find(self.root, bug_id))})
+        elif action == 'discord-clip':
+            # For pasting by hand: the clip small enough for Discord, shown in Finder to drag in.
+            clip = discord.small_clip(bugs.find(self.root, bug_id))
+            if not clip:
+                return self.send(404, {'error': 'This bug has no clip.'})
+            if sys.platform == 'darwin' and body.get('reveal', True):
+                subprocess.run(['open', '-R', str(clip)], stdin=subprocess.DEVNULL)
+            return self.send(200, {'file': clip.name, 'mb': round(clip.stat().st_size / 1048576, 1)})
         elif action == 'discord':
             hook = settings(self.root).get('discord_webhook')
             if not hook:

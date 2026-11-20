@@ -466,5 +466,11 @@ def test_discord_message_and_send(tmp_path):
     import pytest
     with pytest.raises(ValueError):
         discord.send(hook, folder, lambda *a: (404, b''))
+    import shutil, subprocess as sp
+    if shutil.which('ffmpeg'):                                         # the clip made small for pasting by hand
+        sp.run(['ffmpeg', '-nostdin', '-loglevel', 'fatal', '-f', 'lavfi', '-i', 'testsrc=size=1920x1080:rate=30:duration=1',
+                '-pix_fmt', 'yuv420p', str(folder / 'clip.mp4')], check=True)
+        small = discord.small_clip(folder)
+        assert small.name == 'discord.mp4' and small.stat().st_size < discord.LIMIT
     ui.save_settings(tmp_path, discord_webhook=hook)
     assert ui.public(tmp_path) == {'discord': True}                    # the page never sees the webhook
