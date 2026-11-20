@@ -122,8 +122,7 @@ def test_report_says_what_the_tester_pressed(tmp_path):
     (tmp_path / 'moment.jpg').write_bytes(b'x')
     text = bugs.report(ev, meta, [], tmp_path, t0=988.0, clip_seconds=15, desc=desc)
     assert '| On screen | FIRST DOWN AND 10 · 2:00 Q2 · DALLAS · 13 |' in text
-    assert '**SWITCH ×2, DIVE, dragged the bottom-left**' in text
-    assert '1. SWITCH ×2 (10 s before the bug)' in text and '3. dragged the bottom-left (at the bug)' in text
+    assert '**Pressed in the 15 s before:** SWITCH ×2, DIVE, dragged the bottom-left' in text
     assert '![the moment of the bug](moment.jpg)' in text and 'red box' not in text and '% across' not in text
 
 
@@ -133,7 +132,7 @@ def test_without_labels_taps_are_named_by_place():
     taps = [(985.0, {'type': 'down', 'x': 0.1, 'y': 0.1}), (985.1, {'type': 'up', 'x': 0.1, 'y': 0.1}),   # before the clip
             (990.0, {'type': 'down', 'x': 0.9, 'y': 0.8}), (990.1, {'type': 'up', 'x': 0.9, 'y': 0.8})]
     text = bugs.report(ev, meta, taps, None, t0=988.0, clip_seconds=15)
-    assert '1. tapped the bottom-right (10 s before the bug)' in text and 'tapped the top-left' not in text
+    assert 'tapped the bottom-right' in text and 'tapped the top-left' not in text
 
 
 def test_label_snapping():
@@ -456,7 +455,8 @@ def test_discord_message_and_send(tmp_path):
     meta = {'model': 'Infinix X6870', 'android': '16', 'package': PKG, 'game_version': '1.2', 'serial': 'X'}
     folder = bugs.write(tmp_path, Event('manual', 1763561000.0, note='Kicker freezes mid-kick'), meta, [], [], lambda out: False)
     (folder / 'describe.json').write_text(json.dumps({'did': [], 'summary': 'DIVE ×5', 'situation': 'SECOND DOWN AND 11'}))
-    text = discord.message(folder)
+    assert discord.message(folder) == 'Kicker freezes mid-kick'           # the way GFL bugs go out: the explanation
+    text = discord.message(folder, details=True)
     assert text.startswith('**[') and 'Kicker freezes mid-kick' in text and 'SECOND DOWN AND 11' in text and len(text) <= 2000
     (folder / 'moment.jpg').write_bytes(b'\xff\xd8jpeg')
     hook = 'https://discord.com/api/webhooks/123/abc-DEF_9'

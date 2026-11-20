@@ -118,7 +118,7 @@ crashes, listens for the F8 mark, and writes one folder per bug.
   tap ticks and the bug in orange, the picture at the bug), Report (editable Markdown; edits survive a
   rebuild, and an AI draft asks before replacing them), Log (matched lines marked).
 - **Actions:** Send to Discord (preview dialog, webhook kept in the gitignored `bugs/.lens.json` and never sent to the page), Open GitHub issue (a prefilled new-issue page on the repo you set; nothing is posted, clips are
-  attached by hand), Copy Markdown, Write with AI (local Ollama; needs a 3+ word note), False alarm.
+  attached by hand), Copy Markdown, False alarm. Each manual bug has a "What went wrong" box: that text is the Discord message and the title.
 - **Safety:** 127.0.0.1 only, and only requests addressed to it (no DNS rebinding); files only from inside `bugs/`; POSTs need the page's `X-Lens` header; HTTP
   Range so Safari plays clips.
 - **Done when** (still to check on the phone): a catch shows up in the feed live, and goes to a GitHub issue

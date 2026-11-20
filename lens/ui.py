@@ -20,7 +20,7 @@ from . import bugs, discord
 
 PAGE = Path(__file__).parent / 'web' / 'index.html'
 FILES = {'clip.mp4', 'full.mp4', 'moment.jpg'}
-PUBLIC = ('github_repo', 'package')   # settings the page may see; the Discord webhook is a secret
+PUBLIC = ('github_repo', 'package', 'discord_details')   # settings the page may see; the Discord webhook is a secret
 PORT = 8737
 
 
@@ -253,7 +253,10 @@ class Handler(BaseHTTPRequestHandler):
             if ai.get('error') == 'note':
                 return self.send(422, {'error': 'Write a note of a few words first: what went wrong? The model only rewrites what you saw.'})
         elif action == 'discord-text':
-            return self.send(200, {'text': discord.message(bugs.find(self.root, bug_id))})
+            details = bool(body.get('details', settings(self.root).get('discord_details')))
+            if 'details' in body:
+                save_settings(self.root, discord_details=details)      # the tickbox is remembered
+            return self.send(200, {'text': discord.message(bugs.find(self.root, bug_id), details)})
         elif action == 'discord-clip':
             # For pasting by hand: the clip small enough for Discord, shown in Finder to drag in.
             clip = discord.small_clip(bugs.find(self.root, bug_id))
@@ -267,7 +270,7 @@ class Handler(BaseHTTPRequestHandler):
             if not hook:
                 return self.send(409, {'error': 'Paste the channel\'s Discord webhook link first.'})
             try:
-                discord.send(hook, bugs.find(self.root, bug_id))
+                discord.send(hook, bugs.find(self.root, bug_id), details=bool(settings(self.root).get('discord_details')))
             except ValueError as e:
                 return self.send(502, {'error': str(e)})
         elif action == 'export':

@@ -26,14 +26,21 @@ def valid(url):
     return bool(WEBHOOK.fullmatch((url or '').strip()))
 
 
-def message(folder):
-    """The bug as one Discord message (Markdown, at most 2,000 characters)."""
+def message(folder, details=False):
+    """The bug as one Discord message: the tester's explanation (the way GFL bugs are reported),
+    plus with `details` the scoreboard, the buttons pressed and the device. At most 2,000 characters."""
     folder = Path(folder)
     ev, meta, touches, m = bugs.load(folder)
     read = lambda n: json.loads((folder / n).read_text()) if (folder / n).exists() else {}
     desc, ai = read('describe.json'), read('ai.json')
     kind = bugs.KIND_LABEL.get(ev.kind, 'Bug')
     title = ai.get('title') or bugs.title(ev)
+    if not details:
+        said = ev.note if ev.kind == 'manual' else (ev.lines[0] if ev.lines else title)
+        if ev.kind != 'manual' and ev.note:
+            said += f'\n{ev.note}'
+        text = said or title
+        return text if len(text) <= MAX_CHARS else text[:MAX_CHARS - 1] + '…'
     lines = [f'**[{kind}] {title}**']
     if desc.get('situation'):
         lines.append(f"> On screen: {desc['situation']}")
@@ -84,7 +91,7 @@ def multipart(fields, files):
     return b''.join(parts) + f'--{boundary}--\r\n'.encode(), f'multipart/form-data; boundary={boundary}'
 
 
-def send(webhook, folder, post=None):
+def send(webhook, folder, post=None, details=False):
     """Posts the bug to the channel. Returns {'sent': time, 'files': [...]} or raises ValueError with
     a message the tester can act on. `post(url, body, content_type)` is for tests."""
     if not valid(webhook):
@@ -92,12 +99,13 @@ def send(webhook, folder, post=None):
     folder = Path(folder)
     files, size = [], 0
     clip = small_clip(folder)
-    for path, mime in ((clip, 'video/mp4'), (folder / 'moment.jpg', 'image/jpeg')):
+    picture = folder / 'moment.jpg' if details or not clip else None     # short reports: the clip is enough
+    for path, mime in ((clip, 'video/mp4'), (picture, 'image/jpeg')):
         if path and path.exists() and size + path.stat().st_size <= LIMIT:
             data = path.read_bytes()
             files.append((f'files[{len(files)}]', 'clip.mp4' if mime == 'video/mp4' else path.name, data, mime))
             size += len(data)
-    payload = {'content': message(folder), 'allowed_mentions': {'parse': []},
+    payload = {'content': message(folder, details), 'allowed_mentions': {'parse': []},
                'attachments': [{'id': i, 'filename': f[1]} for i, f in enumerate(files)]}
     body, kind = multipart({'payload_json': json.dumps(payload)}, files)
     post = post or _post

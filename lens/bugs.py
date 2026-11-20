@@ -31,22 +31,6 @@ def moment_image(folder, at):
                           stdin=subprocess.DEVNULL).returncode == 0
 
 
-def did_lines(did, bug_at, last=8):
-    """The last actions as numbered lines, repeats merged: '3. SWITCH ×3 (9 s before the bug)'."""
-    merged = []
-    for at, what in did:
-        if merged and merged[-1][1] == what:
-            merged[-1][2] += 1
-        else:
-            merged.append([at, what, 1])
-    out = []
-    for i, (at, what, n) in enumerate(merged[-last:], 1):
-        ago = bug_at - at
-        when = 'at the bug' if abs(ago) < 0.5 else f'{ago:.0f} s before the bug' if ago > 0 else f'{-ago:.0f} s after'
-        out.append(f'{i}. {what}{f" ×{n}" if n > 1 else ""} ({when})')
-    return '\n'.join(out)
-
-
 def report(ev, meta, touches, folder=None, t0=None, clip_seconds=None, desc=None, ai=None):
     """Markdown report. desc: describe.describe()'s {'did', 'summary', 'situation'} (button names
     read off the screen); without it the taps are named by where they were."""
@@ -57,7 +41,7 @@ def report(ev, meta, touches, folder=None, t0=None, clip_seconds=None, desc=None
         desc = {'did': named, 'summary': describe.summary([(w, 0) for _, w in named]), 'situation': ''}
     bug_at = ev.ts - t0 if t0 is not None else 0
     if desc and desc['did']:
-        steps = f"**{desc['summary']}**\n\n" + did_lines(desc['did'], bug_at)
+        steps = desc['summary']
     else:
         steps = 'No taps recorded: watch clip.mp4.'
     situation = f"| On screen | {desc['situation']} |\n" if desc and desc.get('situation') else ''
@@ -98,12 +82,7 @@ def report(ev, meta, touches, folder=None, t0=None, clip_seconds=None, desc=None
 ## Expected
 {expected}
 
-{repro}## What the tester did ({length} before)
-{steps}
-
-## Attachments
-- {', '.join(f'`{n}`' for n in ('clip.mp4', 'moment.jpg') if folder and (folder / n).exists()) or 'no video'}{chr(10) + '- `full.mp4`: the 30 s before, in case the moment came earlier' if folder and (folder / 'full.mp4').exists() else ''}
-- `logcat.txt` (device log), `touches.jsonl` (raw taps)
+{repro}**Pressed in the {length} before:** {steps}
 """
 
 

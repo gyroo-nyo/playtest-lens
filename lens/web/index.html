@@ -182,6 +182,8 @@
   dialog footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }
   .preview { background: var(--surface); border-radius: 2px; padding: 12px; font: 400 13px/1.5 var(--sans); white-space: pre-wrap; margin: 0;
              max-height: 40vh; overflow-y: auto; overflow-wrap: anywhere; }
+  .check { display: flex; align-items: center; gap: 8px; font: 400 13px/1.45 var(--sans); color: var(--on-surface); cursor: pointer; }
+  .check input { width: 16px; height: 16px; accent-color: var(--tertiary); margin: 0; }
   .attach { display: flex; gap: 8px; flex-wrap: wrap; font: 400 12px/1.4 var(--mono); color: var(--secondary); margin: 0; }
   .attach span { background: var(--raised); border-radius: 2px; padding: 4px 8px; }
   .field-group { display: grid; gap: 6px; }
@@ -286,6 +288,7 @@
   <header><span class="label" id="discordTitle">Send to Discord</span></header>
   <div class="body">
     <pre class="preview" id="discordPreview"></pre>
+    <label class="check"><input type="checkbox" id="dDetails"> Add details: what was on screen, buttons pressed, device and build</label>
     <p class="attach" id="discordAttach"></p>
     <div class="field-group" id="hookGroup" hidden>
       <label for="hookInput">Channel webhook link</label>
@@ -451,13 +454,12 @@ function renderDetail() {
       <label for="noteInput">What went wrong</label>
       <div class="row2"><input class="field" id="noteInput" value="${esc(m.note || '')}" placeholder="e.g. Kicker freezes mid-kick after pressing DIVE" autocomplete="off" aria-describedby="noteHelp">
       <button class="btn" id="aNote">Save comment</button></div>
-      <p class="help" id="noteHelp">${(m.note || '').trim().split(/\s+/).filter(Boolean).length < 3 ? 'A few words make the title and let Write with AI turn it into a full report.' : 'This is the bug\u2019s title in reports.'}</p>
+      <p class="help" id="noteHelp">${(m.note || '').trim().split(/\s+/).filter(Boolean).length < 3 ? 'Explain the bug the way you would on Discord: this is the message, and the bug\u2019s title.' : 'This is the bug\u2019s title in reports.'}</p>
     </div>` : ''}
     <div class="actions">
       <button class="btn primary" id="aDiscord" title="Preview and send to the Discord channel (D)">Send to Discord <kbd>D</kbd></button>
       <button class="btn" id="aCopy" title="Copy the report as Markdown (C)">Copy Markdown <kbd>C</kbd></button>
       <button class="btn" id="aExport" title="Open a prefilled GitHub issue (E)">GitHub issue <kbd>E</kbd></button>
-      <button class="btn" id="aAi" title="Rewrite the report with the local model (A)">Write with AI <kbd>A</kbd></button>
       ${bug.false_alarm ? `<button class="btn" id="aRestore">Not a false alarm</button>`
                         : `<button class="btn" id="aDismiss" title="Move to false alarms (X)">False alarm <kbd>X</kbd></button>`}
     </div>
@@ -507,7 +509,7 @@ function wireDetail() {
   document.querySelectorAll('[data-clip]').forEach(b => b.onclick = () => { clipName = b.dataset.clip; renderDetail(); });
   const on = (sel, fn) => { const el = $(sel); if (el) el.onclick = fn; };
   on('#aNote', saveNote); on('#aDiscord', openDiscord);
-  const ni = $('#noteInput'); if (ni) ni.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); saveNote(); } }); on('#aExport', exportIssue); on('#aCopy', copyMd); on('#aAi', writeAi); on('#aDismiss', () => act('dismiss')); on('#aRestore', () => act('restore')); on('#aSave', saveReport);
+  const ni = $('#noteInput'); if (ni) ni.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); saveNote(); } }); on('#aExport', exportIssue); on('#aCopy', copyMd); on('#aDismiss', () => act('dismiss')); on('#aRestore', () => act('restore')); on('#aSave', saveReport);
 }
 
 function msg(text, err) {
@@ -612,13 +614,25 @@ function renderMarkRow() {
         : 'Enter or F8 saves the last 15 s now. Write what went wrong when you\u2019re ready.';
 }
 
+async function discordText(details) {
+  const res = await post(`/api/bug/${encodeURIComponent(bug.id)}/discord-text`, details === undefined ? {} : {details});
+  if (res.ok) { $('#discordPreview').textContent = (await res.json()).text; if (details !== undefined) state.settings.discord_details = details; }
+  return res.ok;
+}
+
+function showAttach() {
+  const clip = bug.files.includes('clip.mp4'), pic = bug.files.includes('moment.jpg');
+  const files = [clip && 'clip.mp4', pic && (!clip || $('#dDetails').checked) && 'moment.jpg'].filter(Boolean);
+  $('#discordAttach').innerHTML = files.length ? files.map(f => `<span>${esc(f)}</span>`).join('') : '<span>No clip or picture for this bug</span>';
+}
+
 async function openDiscord() {
   if (!bug) return;
-  const res = await post(`/api/bug/${encodeURIComponent(bug.id)}/discord-text`);
-  if (!res.ok) return msg('Couldn\u2019t build the message.', true);
-  $('#discordPreview').textContent = (await res.json()).text;
-  const files = [bug.files.includes('clip.mp4') && 'clip.mp4', bug.files.includes('moment.jpg') && 'moment.jpg'].filter(Boolean);
-  $('#discordAttach').innerHTML = files.length ? files.map(f => `<span>${esc(f)}</span>`).join('') : '<span>No clip or picture for this bug</span>';
+  if ($('#noteInput') && !$('#noteInput').value.trim()) { $('#noteInput').focus(); return msg('Explain the bug first: that\u2019s the message.', true); }
+  if ($('#noteInput') && $('#noteInput').value.trim() !== (bug.meta.note || '') && !await saveNote()) return;
+  $('#dDetails').checked = !!state.settings.discord_details;
+  if (!await discordText()) return msg('Couldn\u2019t build the message.', true);
+  showAttach();
   $('#hookGroup').hidden = state.settings.discord; $('#hookErr').hidden = true; $('#hookInput').value = '';
   $('#dSend').disabled = false; $('#dSend').textContent = bug.discord ? 'Send again' : 'Send to channel';
   $('#discordDlg').showModal();
@@ -678,7 +692,7 @@ function status(s, down) {
            <span>Buffer 30 s</span>`
         : `<span>Not recording</span><span>${s.bugs.length} bugs on disk</span>`}
     <span>Reports: ${s.settings.discord ? 'Discord' : 'Discord not set'}${s.settings.github_repo ? ' · GitHub ' + esc(s.settings.github_repo) : ''}</span>
-    <span class="keys">J/K · 1 2 3 · D Discord · A AI · X false</span>`;
+    <span class="keys">J/K · 1 2 3 · D Discord · X false alarm</span>`;
   $('#openSettings').onclick = () => openSettings();
 }
 
@@ -700,7 +714,7 @@ document.addEventListener('keydown', e => {
   if (k === 'j') move(1); else if (k === 'k') move(-1);
   else if (k === '1') tab('clip'); else if (k === '2') tab('report'); else if (k === '3') tab('log');
   else if (bug && k === 'd') { press('#aDiscord'); openDiscord(); } else if (bug && k === 'e') { press('#aExport'); exportIssue(); }
-  else if (bug && k === 'c') { press('#aCopy'); copyMd(); } else if (bug && k === 'a') { press('#aAi'); writeAi(); }
+  else if (bug && k === 'c') { press('#aCopy'); copyMd(); }
   else if (bug && k === 'x' && !bug.false_alarm) { press('#aDismiss'); setTimeout(() => act('dismiss'), 120); }
   else return;
   e.preventDefault();
@@ -711,6 +725,7 @@ $('#tabFalse').onclick = () => { list = 'false'; renderFeed(); };
 $('#markBtn').onclick = mark;
 $('#markNote').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitMark(); } });
 $('#dCancel').onclick = () => $('#discordDlg').close();
+$('#dDetails').onchange = e => { discordText(e.target.checked); showAttach(); };
 $('#dSend').onclick = sendDiscord;
 $('#hookInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendDiscord(); });
 $('#dCopy').onclick = async () => {
