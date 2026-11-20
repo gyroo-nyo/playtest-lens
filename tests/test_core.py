@@ -413,6 +413,8 @@ def test_dashboard_server(tmp_path):
         assert post('/api/settings', b'{"github_repo": "superfusion/gfl-bugs"}', {'X-Lens': '1'})[0] == 200
         code, body = post(f'/api/bug/{folder.name}/export', headers={'X-Lens': '1'})
         assert code == 200 and json.loads(body)['url'].startswith('https://github.com/superfusion/gfl-bugs/issues/new?title=')
+        code, body = post(f'/api/bug/{folder.name}/note', b'{"text": "Ball goes through the left post"}', {'X-Lens': '1'})
+        assert code == 200 and json.loads(body)['meta']['title'] == 'Ball goes through the left post'
         assert post(f'/api/bug/{folder.name}/dismiss', headers={'X-Lens': '1'})[0] == 200
         assert json.loads(get('/api/state')[2])['false_alarms'][0]['id'] == folder.name
     finally:

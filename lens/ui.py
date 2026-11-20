@@ -228,7 +228,7 @@ class Handler(BaseHTTPRequestHandler):
                 changes['discord_webhook'] = hook
             save_settings(self.root, **changes)
             return self.send(200, public(self.root))
-        m = re.fullmatch(r'/api/bug/([^/]+)/(report|dismiss|restore|rebuild|ai|export|discord|discord-text|discord-clip)', path)
+        m = re.fullmatch(r'/api/bug/([^/]+)/(report|note|dismiss|restore|rebuild|ai|export|discord|discord-text|discord-clip)', path)
         if not m:
             return self.send(404, {'error': 'not found'})
         bug_id, action = urllib.parse.unquote(m.group(1)), m.group(2)
@@ -236,6 +236,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(404, {'error': 'no such bug'})
         if action == 'report':
             bugs.save_report(self.root, bug_id, str(body.get('text', '')))
+        elif action == 'note':
+            if not str(body.get('text', '')).strip():
+                return self.send(400, {'error': 'Write what went wrong first.'})
+            bugs.set_note(self.root, bug_id, str(body['text']))
         elif action == 'dismiss':
             bugs.dismiss(self.root, bug_id)
         elif action == 'restore':

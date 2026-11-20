@@ -235,6 +235,17 @@ def save_report(root, bug_id, text):
     return True
 
 
+def set_note(root, bug_id, text):
+    """The tester's comment on a saved bug: becomes its title and goes into the report."""
+    folder = find(root, bug_id)
+    if not folder:
+        return None
+    ev, meta, touches, m = load(folder)
+    ev.note = text.strip()[:300]
+    update(folder, ev, meta, touches, (folder / 'clip.mp4').exists(), m.get('clip_start'), m.get('clip_seconds'))
+    return folder
+
+
 def write_with_ai(root, bug_id):
     """Asks the local model for a draft and rewrites report.md with it. Returns the draft; {'error': 'note'}
     when a manual mark's note is too short to rewrite; None when no local model answers."""
