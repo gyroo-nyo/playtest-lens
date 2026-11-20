@@ -152,7 +152,8 @@ def play(det, frames, taps, fps=None):
     feed += [(t / 1.0, 'fps', fps(t)) for t in range(0, int(max(t for t, _ in frames)) + 1)]
     for t, kind, v in sorted(feed, key=lambda e: e[0]):
         if kind == 'fps':
-            det.drawing(t, v)
+            if v is not None:
+                det.drawing(t, v)
         elif kind == 'tap':
             det.touch(t, {'type': 'down', 'x': v[0], 'y': v[1]})
             det.touch(t + 0.05, {'type': 'up', 'x': v[0], 'y': v[1]})
@@ -250,3 +251,23 @@ def test_zero_fps_is_a_pause_not_lag():
 
 def test_one_report_per_laggy_stretch():
     assert len(feed_fps([SMOOTH] + [(20, 300)] * 12 + [SMOOTH])) == 1
+
+
+def test_coming_back_from_an_ad_is_not_lag():
+    # 08:58 on the Infinix: the ad stuttered, then the game's first frame back came 14 s after its last
+    assert feed_fps([SMOOTH, (22.64, 283), (3.0, 14100), SMOOTH]) == []
+
+
+def test_ad_frames_are_not_the_game():
+    line = 'queueBuffer: fps=22.64 dur=1015.79 max=283.47 min=16.0'
+    assert freeze.game_frames(f'[superfusion.gfl/com.google.android.gms.ads.AdActivity#28659](this:0xb) {line}', 'superfusion.gfl') is None
+
+
+def test_tapping_a_still_ad_is_not_a_freeze():
+    det = freeze.Detector()
+    det.drawing(0.0, 47.0)
+    act = freeze.started('START u0 {xflg=0x4 cmp=superfusion.gfl/com.google.android.gms.ads.AdActivity (has extras)} with LAUNCH_MULTIPLE')
+    det.opened(act, 'superfusion.gfl')
+    still = [(t / 5, frame()) for t in range(0, 40)]
+    assert play(det, still, [(2.0, 0.9, 0.1), (3.0, 0.9, 0.1), (4.0, 0.9, 0.1)], fps=lambda t: None) == []
+    assert freeze.started('START u0 {act=android.intent.action.MAIN flg=0x10200000 cmp=superfusion.gfl/.AndroidLauncher}') == 'superfusion.gfl/.AndroidLauncher'

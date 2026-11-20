@@ -28,10 +28,18 @@ COOLDOWN = 10.0    # one bug per freeze, not one per tap
 
 def game_frames(msg, package):
     """(fps, longest frame in ms) from a BufferQueueProducer line for the game's own surface, else None."""
-    if f'[{package}' not in msg or 'queueBuffer: fps=' not in msg:
+    # Only the game's own SurfaceView: an ad (com.google.android.gms.ads.AdActivity) also draws
+    # under the game's package name, and its frames say nothing about the game.
+    if f'SurfaceView[{package}' not in msg or 'queueBuffer: fps=' not in msg:
         return None
     m = re.search(r'queueBuffer: fps=([\d.]+).*?max=([\d.]+)', msg)
     return (float(m.group(1)), float(m.group(2))) if m else None
+
+
+def started(msg):
+    """The activity a log line says is starting ('pkg/.Class'), from ActivityTaskManager 'START u0 {... cmp=...}'."""
+    m = re.match(r'START u\d+ \{.*?\bcmp=(\S+?)[ }]', msg)
+    return m.group(1) if m else None
 
 
 def game_fps(msg, package):
@@ -61,9 +69,15 @@ class Detector:
         self.quiet_until = 0.0
         self.fps = deque()        # (ts, fps) of the game's surface
         self.logs_fps = False     # has this phone ever logged the game's frame rate?
+        self.away = False         # another screen (an ad, the home screen) is on top of the game
+
+    def opened(self, activity, package):
+        """An activity started. An ad or another app covers the game until the game draws again."""
+        self.away = not activity.startswith(package + '/') or '.ads.' in activity
 
     def drawing(self, ts, fps):
         self.logs_fps = True
+        self.away = False
         self.fps.append((ts, fps))
         while self.fps and self.fps[0][0] < ts - 20:
             self.fps.popleft()
@@ -95,8 +109,8 @@ class Detector:
         since = [f for t, f in self.frames if t >= first]
         if len(since) < 5 or any(change(before, f, holes) >= STILL for f in since):
             return None                     # something moved: the game is alive
-        if not self.logs_fps:
-            return None                     # can't confirm the game stopped drawing
+        if not self.logs_fps or self.away:
+            return None                     # can't confirm it, or the game is behind an ad / another app
         if any(f >= DRAWING for t, f in self.fps if t >= first):
             return None                     # still drawing: a still screen, not a freeze
         return self.caught('freeze', first, f'The game froze: {len(downs)} taps in {ts - first:.0f} s, '

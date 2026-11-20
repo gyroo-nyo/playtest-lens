@@ -100,6 +100,8 @@ def cmd_watch(a):
         if not e:
             return
         logs.add(e.ts + offset, e.raw)
+        if e.tag == 'ActivityTaskManager' and (act := freeze.started(e.msg)):
+            seen.opened(act, a.package)
         frames = freeze.game_frames(e.msg, a.package)
         if frames:
             seen.drawing(e.ts + offset, frames[0])

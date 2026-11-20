@@ -11,6 +11,7 @@ SLOW = 30.0        # fps under this is visible lag
 SLOW_FOR = 2       # readings in a row (about seconds)
 STOPPED = 2.0      # under this the game isn't drawing at all: not lag
 HITCH = 250.0      # ms: a frame this long is a visible stutter (steady 15 fps menus peak ~120)
+AWAY = 5000.0      # ms: a frame this long means the game was off screen (an ad, the home screen), not lag
 COOLDOWN = 15.0    # one report per laggy stretch
 
 
@@ -21,7 +22,7 @@ class Detector:
 
     def drawing(self, ts, fps, longest):
         """Feed one reading (fps, longest frame in ms); returns an Event('lag') or None."""
-        if fps < STOPPED or fps >= SLOW or longest < HITCH:
+        if fps < STOPPED or fps >= SLOW or not HITCH <= longest < AWAY:
             self.run = []
             return None
         self.run.append((ts, fps, longest))
