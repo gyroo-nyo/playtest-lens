@@ -29,7 +29,7 @@ phone ──adb──▶ capture ──▶ ring buffer (30 s: video, touches, lo
 | Freeze | video + `getevent` + `logcat` | 3+ taps, the **whole** screen unchanged for 3 s (Show-taps dots ignored) **and** the game's own frame rate (BufferQueueProducer `queueBuffer: fps=` for its surface) under 2 fps. Video alone flagged GFL's pre-snap screen. No frame-rate log on a phone = no auto freeze reports. Stuck buttons are left to manual marks (a dead spot and a broken button look the same). `x` + Enter files a wrong catch under `bugs/_false_alarms/` |
 | Frame drops | `logcat` (BufferQueueProducer `queueBuffer: fps= … max=` for the game's surface) | 2+ readings in a row under 30 fps **with a stutter** (a frame ≥ 250 ms). GFL's play-calling screen runs a steady 15 fps on purpose, so slow alone isn't lag. Replayed on 452 real readings: one catch, the 3.2 s hitch opening the controls editor |
 | Visual glitch | video | black / magenta missing textures (pixel stats), then a local vision model to confirm |
-| Text bug | OCR on frames | raw string keys (`MENU_START_TITLE`), cut-off text, `null`/`{0}` |
+| Text bug | macOS Vision OCR (`lens/ocr/ocr.swift`, built once with swiftc) on a full-size frame every 3 s, only while the game is on screen and drawing | raw string keys (`MENU_START_TITLE`), unfilled placeholders (`{0}`, `%s`), `null`/`undefined`/`NaN`, `#MISSING`/`???`; each string once per session. 265 real GFL frames: no false hits (the only hits were a WhatsApp chat, now skipped). Cut-off text: later |
 | **Anything else** | **you** | **hotkey or "Mark bug" button + one line of text or voice** |
 
 ## Manual marks (bugs the detectors missed)

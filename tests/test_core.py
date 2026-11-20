@@ -281,3 +281,21 @@ def test_fps_meter_timeline():
     assert steps[1][0] == 2.0 and steps[2][0] == 5.0    # "--" once the last reading is over 2.5 s old
     assert meter.color(15) == (240, 70, 60) and meter.color(None) == (150, 150, 150)
     assert meter.ppm('47 FPS', (0, 0, 0)).startswith(b'P6 ')
+
+
+def test_text_bugs():
+    from lens import text
+    for broken in ['MENU_START_TITLE', 'Score: {0}', 'Welcome back, %s', 'Coach: null', 'BTN_PLAY', '#MISSING', 'Reward: undefined']:
+        assert text.suspicious(broken), broken
+    # everything GFL actually shows, read off real frames
+    for fine in ['GFL', 'JUMP', 'SWITCH', 'FEINT', 'GO', 'MINUTEMEN', 'SECOND DOWN AND 4', '1:22 Q4', 'FIELD GOAL !',
+                 'EXTRA POINT', 'PREVENT', 'PRESSURE', 'BLITZ', 'thumb pad', 'done', 'defaults', 'cancel', 'DALLAS', '14',
+                 'NEW ENGLAND', '100%', 'Q&A', '3RD & 10']:
+        assert not text.suspicious(fine), fine
+
+
+def test_each_text_bug_reported_once():
+    from lens import text
+    det = text.Detector()
+    assert det.check(1.0, [('JUMP',), ('MENU_START_TITLE',)]).lines[0].startswith('Broken text on screen: "MENU_START_TITLE"')
+    assert det.check(4.0, [('MENU_START_TITLE',)]) is None

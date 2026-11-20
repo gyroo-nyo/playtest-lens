@@ -98,6 +98,17 @@ class Recorder(threading.Thread):
             p.terminate()
 
 
+def last_frame(segments, out):
+    """Saves the last frame of the newest finished segment as an image. Returns its host time, or None."""
+    done = sorted(segments, key=lambda s: s[2])[:-1]     # the newest one is still being written
+    if not done:
+        return None
+    path, _, end = done[-1]
+    ok = subprocess.run(['ffmpeg', '-nostdin', '-loglevel', 'fatal', '-y', '-sseof', '-0.3', '-i', path,
+                         '-frames:v', '1', str(out)], stdin=subprocess.DEVNULL).returncode == 0
+    return end if ok else None
+
+
 def cut(segments, t0, t1, out, fps=None):
     """Join the segments and trim to [t0, t1]. Returns False when there is no video.
     fps: [(host ts, game fps)] to burn an FPS meter into the top-left corner (re-encodes the clip)."""
