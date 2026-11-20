@@ -7,7 +7,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import adb, bugs, freeze, glitch, lag, logcat, text, video
+from . import adb, bugs, freeze, glitch, lag, logcat, text, ui, video
 from .logcat import Event
 from .ring import Ring, segments_for
 from .touches import Tracker
@@ -60,6 +60,7 @@ def cmd_watch(a):
     print(f'Watching {a.package} {meta["game_version"]} on {model}. Mark a bug: {a.hotkey.upper()} or type "m <note>" + Enter. Wrong catch? "x" + Enter. Ctrl+C to stop.')
 
     logs, touches, rates = Ring(60), Ring(60), Ring(60)
+    live = ui.Live(a.package, meta['game_version'], model, None)   # what the dashboard shows; mark is set below
     pids = {'set': adb.pids(serial, a.package)}
     detector = logcat.Detector(a.package)
     seen = freeze.Detector()
@@ -93,6 +94,7 @@ def cmd_watch(a):
         print(f'\n● {ev.kind.upper()} saved: {folder}', flush=True)
 
     def catch(ev):
+        live.caught.append((ev.ts, ev.kind, bugs.title(ev)))
         threading.Thread(target=capture, args=(ev,), daemon=True).start()
 
     def on_log(ts, line):
@@ -106,6 +108,7 @@ def cmd_watch(a):
         if frames:
             seen.drawing(e.ts + offset, frames[0])
             rates.add(e.ts + offset, frames[0])
+            live.fps, live.fps_ts = frames[0], time.time()
             if (dropped := slow.drawing(e.ts + offset, *frames)):
                 print(f'\n● LAG caught: {bugs.title(dropped)}', flush=True)
                 catch(dropped)
@@ -117,6 +120,27 @@ def cmd_watch(a):
     def mark(note=''):
         print(f'\n● MARKED: {note}' if note else '\n● MARKED. Type a one-line note and press Enter (or just Enter).', flush=True)
         catch(Event('manual', time.time(), note=note))
+
+    # The dashboard: the live phone, the bug feed, clips and reports, on this Mac only.
+    live.mark = mark
+    if not a.no_ui:
+        try:
+            _, url = ui.serve(a.out, live, a.port)
+            print(f'Dashboard: {url}', flush=True)
+        except OSError:
+            print(f'Dashboard off: port {a.port} is in use (another Lens running?). Try --port 8738.', flush=True)
+
+    def show_live():
+        frame = Path(tempfile.mkdtemp(prefix='lens-live-')) / 'live.jpg'
+        while True:
+            time.sleep(1)
+            try:
+                live.connected = rec.connected
+                if (t := video.last_frame(rec.segments(), frame)) and t != live.frame_ts:
+                    live.frame, live.frame_ts = str(frame), t
+            except Exception:
+                pass
+    threading.Thread(target=show_live, daemon=True).start()
 
     # Android's "Show taps": white dots in the recording wherever a finger touches, so the clip
     # shows what was tapped. Put back as it was when Lens stops.
@@ -215,6 +239,17 @@ def cmd_watch(a):
             p.terminate()
 
 
+def cmd_ui(a):
+    server, url = ui.serve(a.out, None, a.port)
+    print(f'Dashboard: {url}  (saved bugs in {a.out}/; Ctrl+C to stop)', flush=True)
+    subprocess.run(['open', url], stdin=subprocess.DEVNULL) if sys.platform == 'darwin' else None
+    try:
+        while True:
+            time.sleep(3600)
+    except KeyboardInterrupt:
+        server.shutdown()
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog='lens', description='A dashcam and bug reporter for game testers.')
     sub = ap.add_subparsers(dest='cmd', required=True)
@@ -223,7 +258,13 @@ def main(argv=None):
     w.add_argument('package', help='the game package, e.g. com.example.game')
     w.add_argument('--out', default='bugs', help='where bug folders go (default: ./bugs)')
     w.add_argument('--hotkey', default='<f8>', help='mark hotkey in pynput format (default: <f8>)')
+    w.add_argument('--port', type=int, default=ui.PORT, help=f'dashboard port (default: {ui.PORT})')
+    w.add_argument('--no-ui', action='store_true', help="don't start the dashboard")
     w.set_defaults(fn=cmd_watch)
+    u = sub.add_parser('ui', help='open the dashboard on saved bugs (no phone needed)')
+    u.add_argument('--out', default='bugs', help='the bugs folder (default: ./bugs)')
+    u.add_argument('--port', type=int, default=ui.PORT, help=f'port (default: {ui.PORT})')
+    u.set_defaults(fn=cmd_ui)
     a = ap.parse_args(argv)
     a.fn(a)
 

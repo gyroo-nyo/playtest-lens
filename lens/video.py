@@ -20,6 +20,7 @@ class Recorder(threading.Thread):
         self.dir.mkdir(parents=True, exist_ok=True)
         self.stopped = threading.Event()
         self.procs = []
+        self.connected = True
 
     def ready(self, adb):
         """The phone is connected and has allowed USB debugging (not 'unauthorized' or 'authorizing')."""
@@ -37,11 +38,13 @@ class Recorder(threading.Thread):
             if not self.ready(adb):
                 if not waiting:
                     print('Phone not connected (cable dropped, or USB debugging not allowed yet). Waiting for it…', flush=True)
+                    self.connected = False
                     waiting = True
                 self.stopped.wait(2)
                 continue
             if waiting:
                 print('Phone back, recording again.', flush=True)
+                self.connected = True
                 waiting = False
             began = time.monotonic()
             # screenrecord stops itself after 3 minutes, so restart it every 170 s

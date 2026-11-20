@@ -17,3 +17,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["lens"]
+
+[tool.setuptools.package-data]
+lens = ["web/*.html", "ocr/*.swift"]

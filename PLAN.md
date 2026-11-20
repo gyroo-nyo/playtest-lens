@@ -57,10 +57,10 @@ Touches are recorded from `adb shell getevent` with timestamps and replayed with
 
 ## Stack
 
-- **Core:** Python 3.12, adb (no root), OpenCV, Tesseract or EasyOCR for text, `pynput` for the hotkey
+- **Core:** Python 3.12, adb (no root), ffmpeg, macOS Vision for text (a small Swift helper), `pynput` for the hotkey
 - **Video:** `adb exec-out screenrecord` (or scrcpy) piped through ffmpeg into a segmented ring buffer
-- **Models:** Ollama (a small vision model for glitches, a text model for reports), Whisper for voice notes
-- **Dashboard:** FastAPI + a React web UI on localhost: live view, bug feed, clip player, report editor
+- **Models:** Ollama on the Mac for report drafts (cloud models skipped); Whisper for voice notes later
+- **Dashboard:** standard-library `http.server` + one HTML page (`lens/web/index.html`, no build step, no new packages) on 127.0.0.1:8737: live view, bug feed, clip player with tap ticks, report editor, log view, export. Chosen over FastAPI + React to keep it $0, offline and dependency-free
 - **Tests:** pytest with recorded fixtures (sample logcat dumps, short clips), so detectors are tested
   without a phone. CI on GitHub Actions.
 
@@ -107,6 +107,22 @@ crashes, listens for the F8 mark, and writes one folder per bug.
   window, and bug folder writing.
 - **Done when:** with a phone plugged in, force-stopping the game with a crash and pressing F8 each
   produce a bug folder with a playable clip covering the moment.
+
+## Phase 3 design (the dashboard)
+
+`lens watch <package>` serves it at http://127.0.0.1:8737; `lens ui` opens it on saved bugs with no phone.
+
+- **Device panel:** the phone's screen (a frame a second), REC, session clock, FPS, Mark (F8) with a note.
+- **Feed:** caught bugs and false alarms, newest first; short notes show the scoreboard beside them.
+- **Bug:** what was on screen and what was pressed; Clip (15 s clip or the 30 s before, a scrubber with
+  tap ticks and the bug in orange, the picture at the bug), Report (editable Markdown; edits survive a
+  rebuild), Log (matched lines marked).
+- **Actions:** Open GitHub issue (a prefilled new-issue page on the repo you set; nothing is posted, clips are
+  attached by hand), Copy Markdown, Write with AI (local Ollama; needs a 3+ word note), False alarm.
+- **Safety:** 127.0.0.1 only; files only from inside `bugs/`; POSTs need the page's `X-Lens` header; HTTP
+  Range so Safari plays clips.
+- **Done when** (still to check on the phone): a catch shows up in the feed live, and goes to a GitHub issue
+  in under 30 s.
 
 ## Skills used on this project
 

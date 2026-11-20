@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playtest Lens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  /* Flight Recorder (DESIGN.md): warm cockpit charcoal, one accent (black-box orange = live or caught). */
+  :root {
+    --primary: #ECE7DF; --secondary: #968E83; --tertiary: #F26A2E;
+    --neutral: #1C1A17; --surface: #141311; --raised: #24221E; --on-surface: #D8D2C8; --border: #35322C;
+    --error: #EE6A62; --caution: #E3B648; --advisory: #74B9C9; --normal: #86AA80;
+    --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    --sans: 'IBM Plex Sans', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--surface); color: var(--on-surface); font: 400 14px/1.55 var(--sans);
+    display: grid; grid-template-rows: 1fr 28px; overflow: hidden;
+    font-variant-numeric: tabular-nums;
+  }
+  button, input, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  .label { font: 500 11px/1.3 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--secondary); }
+  .mono { font-family: var(--mono); }
+
+  main { display: grid; grid-template-columns: minmax(340px, 40%) 1fr; gap: 1px; background: var(--border); min-height: 0; }
+  .zone { background: var(--surface); min-height: 0; display: flex; flex-direction: column; }
+  .panel { background: var(--neutral); border-radius: 4px; margin: 12px; min-height: 0; display: flex; flex-direction: column; }
+  .panel > header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .panel > header .label { flex: 1; }
+
+  /* device */
+  .rec { display: inline-flex; align-items: center; gap: 6px; font: 500 11px/1.3 var(--mono); letter-spacing: .12em; color: var(--secondary); }
+  .rec i { width: 8px; height: 8px; border-radius: 9999px; background: var(--border); }
+  .rec.on { color: var(--tertiary); }
+  .rec.on i { background: var(--tertiary); animation: pulse 1s ease-in-out infinite alternate; }
+  @keyframes pulse { to { opacity: .45; } }
+  .readout { font: 500 28px/1.1 var(--mono); letter-spacing: -.01em; color: var(--primary); }
+  .readouts { display: flex; gap: 24px; padding: 12px 16px 0; align-items: baseline; }
+  .readouts small { display: block; }
+  .frame { position: relative; margin: 16px; flex: 1; min-height: 160px; background: var(--surface); display: grid; place-items: center; overflow: hidden; }
+  .frame img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+  .frame .empty { font: 400 13px/1.45 var(--mono); color: var(--secondary); padding: 24px; text-align: center; max-width: 36ch; }
+  .frame::before, .frame::after, .frame > .b1, .frame > .b2 {
+    content: ''; position: absolute; width: 12px; height: 12px; border: 1px solid var(--border); pointer-events: none;
+  }
+  .frame::before { top: 0; left: 0; border-width: 1px 0 0 1px; }
+  .frame::after { top: 0; right: 0; border-width: 1px 1px 0 0; }
+  .frame > .b1 { bottom: 0; left: 0; border-width: 0 0 1px 1px; }
+  .frame > .b2 { bottom: 0; right: 0; border-width: 0 1px 1px 0; }
+  .frame.flash::before, .frame.flash::after, .frame.flash > .b1, .frame.flash > .b2 { border-color: var(--tertiary); }
+  .mark-row { display: flex; gap: 8px; padding: 0 16px 16px; }
+  .mark-row input { flex: 1; }
+
+  /* controls */
+  .btn { border: 0; border-radius: 2px; padding: 8px 12px; cursor: pointer; font: 500 11px/1.3 var(--mono); letter-spacing: .12em; text-transform: uppercase;
+         background: var(--raised); color: var(--primary); transition: background-color 120ms ease-out; }
+  .btn:hover { background: #2E2B26; }
+  .btn.primary { background: var(--tertiary); color: var(--surface); }
+  .btn.primary:hover { background: var(--primary); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .btn kbd { font: inherit; opacity: .7; margin-left: 6px; }
+  .btn.primary kbd { opacity: 1; }   /* .7 on orange is 3.8:1, under AA */
+  input.field, textarea.field { background: var(--surface); color: var(--primary); border: 1px solid var(--border); border-radius: 2px; padding: 8px; }
+  input.field.bad { color: var(--error); border-color: var(--error); }
+
+  /* feed */
+  .feed-tabs { display: flex; gap: 4px; }
+  .tab { background: none; border: 0; padding: 4px 8px; cursor: pointer; font: 500 11px/1.3 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--secondary); border-radius: 2px; }
+  .tab[aria-selected="true"] { color: var(--primary); background: var(--raised); }
+  .feed { list-style: none; margin: 0; padding: 0; overflow-y: auto; max-height: 34vh; min-height: 96px; }
+  .row { display: grid; grid-template-columns: 10px 64px 72px 1fr auto; align-items: center; gap: 8px; height: 32px; padding: 0 16px 0 14px;
+         border-left: 2px solid transparent; font-size: 13px; cursor: pointer; }
+  .row:hover { background: var(--raised); }
+  .row[aria-selected="true"] { background: var(--raised); border-left-color: var(--primary); color: var(--primary); font-weight: 600; }
+  .row .dot { width: 4px; height: 4px; border-radius: 9999px; background: var(--tertiary); visibility: hidden; }
+  .row.unread .dot { visibility: visible; }
+  .row .t, .row .len { font: 400 13px/1 var(--mono); color: var(--secondary); }
+  .row .title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .title .sub { font: 400 13px/1 var(--mono); color: var(--secondary); margin-left: 8px; }
+  .chip { justify-self: start; font: 500 11px/1 var(--mono); letter-spacing: .12em; padding: 3px 4px; border-radius: 2px; border: 1px solid; background: var(--neutral); }
+  .k-crash, .k-anr { color: var(--error); border-color: rgba(238,106,98,.4); }
+  .k-freeze, .k-lag { color: var(--caution); border-color: rgba(227,182,72,.4); }
+  .k-text, .k-glitch { color: var(--advisory); border-color: rgba(116,185,201,.4); }
+  .k-manual { color: var(--primary); border-color: rgba(236,231,223,.4); }
+  .none { font: 400 13px/1.45 var(--mono); color: var(--secondary); padding: 16px; }
+
+  /* detail */
+  .detail { flex: 1; }
+  .detail-body { flex: 1; overflow-y: auto; padding: 16px; min-height: 0; }
+  .detail h2 { font: 600 20px/1.25 var(--sans); color: var(--primary); margin: 0 0 4px; max-width: 72ch; }
+  .facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 12px 0 16px; font-size: 13px; }
+  .facts dt { font: 500 11px/1.9 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--secondary); }
+  .facts dd { margin: 0; font-family: var(--mono); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  video { width: 100%; max-height: 46vh; background: var(--surface); display: block; }
+  .scrub { position: relative; height: 18px; background: var(--surface); border: 1px solid var(--border); border-top: 0; cursor: pointer; }
+  .scrub .head { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--secondary); }
+  .scrub .tap { position: absolute; bottom: 3px; width: 1px; height: 6px; background: var(--on-surface); opacity: .8; }
+  .scrub .bug { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--tertiary); }
+  .clip-pick { display: flex; gap: 4px; margin: 8px 0 16px; }
+  .moment { max-width: 100%; margin-top: 8px; display: block; }
+  textarea.report { width: 100%; min-height: 46vh; resize: vertical; font: 400 13px/1.5 var(--mono); max-width: 100%; }
+  .log { font: 400 12px/1.5 var(--mono); background: var(--surface); padding: 12px 0; margin: 0; overflow-x: auto; }
+  .log div { white-space: pre; padding: 0 12px 0 10px; border-left: 2px solid transparent; }
+  .log div.hit { border-left-color: var(--caution); color: var(--primary); }
+  .log span { color: var(--secondary); display: inline-block; width: 4ch; text-align: right; margin-right: 12px; user-select: none; }
+  .busy { font: 400 13px/1.45 var(--mono); color: var(--primary); }
+  .msg { font: 400 13px/1.45 var(--mono); color: var(--secondary); min-height: 1.45em; }
+  .msg.err { color: var(--error); }
+
+  /* status bar */
+  .status { display: flex; align-items: center; gap: 24px; padding: 0 16px; border-top: 1px solid var(--border); background: var(--surface);
+            font: 500 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--secondary); white-space: nowrap; overflow: hidden; }
+  .status .ok { color: var(--normal); }
+  .status .warn { color: var(--caution); }
+  .status .keys { margin-left: auto; letter-spacing: .04em; text-transform: none; }
+
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  @media (max-width: 1100px) {
+    body { overflow: auto; }
+    main { grid-template-columns: 1fr; }
+    .frame { min-height: 0; max-height: 180px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rec.on i { animation: none; }
+    .btn { transition: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <section class="zone" aria-label="Phone">
+    <div class="panel" style="flex:1">
+      <header>
+        <span class="label">Device</span>
+        <span class="rec" id="rec"><i></i>REC</span>
+        <button class="btn primary" id="markBtn" title="Mark a bug now (F8)">Mark <kbd>F8</kbd></button>
+      </header>
+      <div class="readouts">
+        <div><span class="readout" id="clock">--:--:--</span><small class="label">Recording</small></div>
+        <div><span class="readout" id="fps">--</span><small class="label">FPS</small></div>
+      </div>
+      <div class="frame" id="frame"><span class="b1"></span><span class="b2"></span>
+        <p class="empty" id="frameEmpty">Not recording. Plug in the phone and run <br>lens watch superfusion.gfl</p>
+      </div>
+      <div class="mark-row">
+        <label class="sr" for="markNote">Note for the bug you mark</label>
+        <input class="field" id="markNote" placeholder="What went wrong? (optional, Enter to mark)" autocomplete="off">
+      </div>
+    </div>
+  </section>
+
+  <section class="zone" aria-label="Bugs">
+    <div class="panel">
+      <header>
+        <span class="label">Bugs</span>
+        <div class="feed-tabs" role="tablist">
+          <button class="tab" role="tab" id="tabBugs" aria-selected="true">Caught <span id="nBugs">0</span></button>
+          <button class="tab" role="tab" id="tabFalse" aria-selected="false">False alarms <span id="nFalse">0</span></button>
+        </div>
+      </header>
+      <ul class="feed" id="feed" role="listbox" aria-label="Bug feed" tabindex="0"></ul>
+    </div>
+
+    <div class="panel detail" id="detail">
+      <header>
+        <span class="label" id="detailLabel">Bug</span>
+        <div class="feed-tabs" role="tablist" aria-label="Bug views">
+          <button class="tab" role="tab" data-view="clip" aria-selected="true">Clip <kbd class="mono">1</kbd></button>
+          <button class="tab" role="tab" data-view="report" aria-selected="false">Report <kbd class="mono">2</kbd></button>
+          <button class="tab" role="tab" data-view="log" aria-selected="false">Log <kbd class="mono">3</kbd></button>
+        </div>
+      </header>
+      <div class="detail-body" id="detailBody"><p class="none">No bug selected. Pick one from the list, or press J.</p></div>
+    </div>
+  </section>
+</main>
+
+<footer class="status" id="status" aria-label="Status"></footer>
+<div class="sr" aria-live="polite" id="announce"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const CHIP = {crash:'CRASH', anr:'ANR', freeze:'FREEZE', lag:'JANK', text:'TEXT', glitch:'VISUAL', manual:'MANUAL'};
+const post = (url, body) => fetch(url, {method:'POST', headers:{'Content-Type':'application/json','X-Lens':'1'}, body: JSON.stringify(body||{})});
+
+let state = null, list = 'bugs', selected = null, view = 'clip', bug = null, clipName = 'clip.mp4', liveFrameTs = 0;
+const seen = new Set((() => { try { return JSON.parse(localStorage.getItem('lens-seen') || '[]'); } catch { return []; } })());
+let firstLoad = true;
+function markSeen(id) { seen.add(id); try { localStorage.setItem('lens-seen', JSON.stringify([...seen].slice(-500))); } catch {} }
+
+function hhmmss(s) { s = Math.max(0, s|0); return [s/3600|0, (s%3600)/60|0, s%60].map(n => String(n).padStart(2,'0')).join(':'); }
+function shortTime(t) { return (t || '').slice(11, 19) || '--'; }
+
+async function refresh() {
+  let s;
+  try { s = await (await fetch('/api/state')).json(); } catch { return status(null, true); }
+  const known = state ? new Set([...state.bugs, ...state.false_alarms].map(b => b.id)) : null;
+  state = s;
+  if (firstLoad) { s.bugs.forEach(b => markSeen(b.id)); s.false_alarms.forEach(b => markSeen(b.id)); firstLoad = false; }
+  else if (known) {
+    for (const b of s.bugs) if (!known.has(b.id)) {
+      $('#announce').textContent = `${CHIP[b.kind] || 'BUG'} caught, ${shortTime(b.time)}`;
+      const f = $('#frame'); f.classList.add('flash'); setTimeout(() => f.classList.remove('flash'), matchMedia('(prefers-reduced-motion: reduce)').matches ? 16 : 400);
+    }
+  }
+  renderLive(); renderFeed(); status(s);
+}
+
+function renderLive() {
+  const L = state.live;
+  $('#rec').classList.toggle('on', !!(L && L.connected));
+  $('#markBtn').disabled = !L;
+  $('#markNote').disabled = !L;
+  $('#clock').textContent = L ? hhmmss(L.recording_for) : '--:--:--';
+  $('#fps').textContent = L && L.fps != null ? Math.round(L.fps) : '--';
+  $('#fps').style.color = !L || L.fps == null ? '' : L.fps >= 40 ? 'var(--primary)' : L.fps >= 25 ? 'var(--caution)' : 'var(--error)';
+  let img = $('#liveImg');
+  if (L && L.frame_ts && !img) {
+    img = document.createElement('img'); img.id = 'liveImg'; img.alt = "The phone's screen, a second behind";
+    $('#frame').appendChild(img);
+  }
+  if (L && L.frame_ts) {
+    if (L.frame_ts !== liveFrameTs) { liveFrameTs = L.frame_ts; img.src = '/live.jpg?t=' + L.frame_ts; }
+    img.hidden = false; $('#frameEmpty').hidden = true;
+  } else {
+    if (img) img.hidden = true;
+    $('#frameEmpty').hidden = false;
+    $('#frameEmpty').innerHTML = L ? (L.connected ? 'Waiting for the first frame…' : 'Phone not connected. Check the cable and USB debugging.')
+                                  : 'Not recording. Plug in the phone and run <br>lens watch superfusion.gfl';
+  }
+}
+
+function rows() { return state ? (list === 'bugs' ? state.bugs : state.false_alarms) : []; }
+
+function renderFeed() {
+  $('#nBugs').textContent = state.bugs.length; $('#nFalse').textContent = state.false_alarms.length;
+  $('#tabBugs').setAttribute('aria-selected', list === 'bugs'); $('#tabFalse').setAttribute('aria-selected', list === 'false');
+  const r = rows();
+  if (!r.length) {
+    $('#feed').innerHTML = `<li class="none">${list === 'bugs' ? 'No bugs yet. Catches and F8 marks land here.' : 'No false alarms. Wrong catches you dismiss land here.'}</li>`;
+    return;
+  }
+  $('#feed').innerHTML = r.map(b => `
+    <li class="row ${seen.has(b.id) ? '' : 'unread'}" role="option" id="r-${esc(b.id)}" data-id="${esc(b.id)}" aria-selected="${b.id === selected}">
+      <span class="dot" aria-hidden="true"></span>
+      <span class="t">${esc(shortTime(b.time))}</span>
+      <span class="chip k-${esc(b.kind)}">${CHIP[b.kind] || esc(b.kind.toUpperCase())}</span>
+      <span class="title">${esc(b.title || 'Marked by tester')}${(b.title || '').split(/\s+/).length < 3 && b.situation ? `<span class="sub"> ${esc(b.situation)}</span>` : ''}</span>
+      <span class="len">${b.clip ? (b.clip_seconds ? Math.round(b.clip_seconds) + 's' : 'clip') : 'no clip'}</span>
+    </li>`).join('');
+}
+
+function remember() { history.replaceState(null, '', selected ? `#bug=${encodeURIComponent(selected)}&view=${view}` : '#'); }
+
+async function select(id) {
+  selected = id; markSeen(id); clipName = 'clip.mp4'; remember();
+  renderFeed();
+  const row = document.getElementById('r-' + id); row && row.scrollIntoView({block:'nearest'});
+  $('#detailBody').innerHTML = '<p class="busy" aria-busy="true">LOADING…</p>';
+  const res = await fetch('/api/bug/' + encodeURIComponent(id));
+  bug = res.ok ? await res.json() : null;
+  renderDetail();
+}
+
+function setView(v) {
+  view = v; remember();
+  document.querySelectorAll('[data-view]').forEach(t => t.setAttribute('aria-selected', t.dataset.view === v));
+  renderDetail();
+}
+
+function renderDetail() {
+  const body = $('#detailBody');
+  if (!bug) { body.innerHTML = '<p class="none">No bug selected. Pick one from the list, or press J.</p>'; $('#detailLabel').textContent = 'Bug'; return; }
+  const m = bug.meta, d = bug.describe || {};
+  $('#detailLabel').textContent = `${CHIP[m.kind] || 'BUG'} · ${shortTime(m.time)}`;
+  const head = `
+    <h2>${esc(m.title || 'Marked by tester')}</h2>
+    <dl class="facts">
+      <dt>When</dt><dd>${esc(m.time)}</dd>
+      ${d.situation ? `<dt>On screen</dt><dd>${esc(d.situation)}</dd>` : ''}
+      ${d.summary ? `<dt>Pressed</dt><dd>${esc(d.summary)}</dd>` : ''}
+      <dt>Device</dt><dd>${esc(m.model)} · Android ${esc(m.android)} · ${esc(m.package)} ${esc(m.game_version)}</dd>
+    </dl>
+    <div class="actions">
+      <button class="btn primary" id="aExport" title="Open a prefilled GitHub issue (E)">Open GitHub issue <kbd>E</kbd></button>
+      <button class="btn" id="aCopy" title="Copy the report as Markdown (C)">Copy Markdown <kbd>C</kbd></button>
+      <button class="btn" id="aAi" title="Rewrite the report with the local model (A)">Write with AI <kbd>A</kbd></button>
+      ${bug.false_alarm ? `<button class="btn" id="aRestore">Not a false alarm</button>`
+                        : `<button class="btn" id="aDismiss" title="Move to false alarms (X)">False alarm <kbd>X</kbd></button>`}
+    </div>
+    <p class="msg" id="msg" role="status"></p>`;
+  let main = '';
+  if (view === 'clip') {
+    if (!bug.files.length) main = '<p class="none">No video for this bug: the phone was disconnected or the screen was off.</p>';
+    else {
+      const has = n => bug.files.includes(n);
+      if (!has(clipName)) clipName = has('clip.mp4') ? 'clip.mp4' : 'full.mp4';
+      main = `
+        ${has('clip.mp4') && has('full.mp4') ? `<div class="clip-pick" role="tablist" aria-label="Which video">
+          <button class="tab" role="tab" data-clip="clip.mp4" aria-selected="${clipName==='clip.mp4'}">15 s clip</button>
+          <button class="tab" role="tab" data-clip="full.mp4" aria-selected="${clipName==='full.mp4'}">30 s before</button></div>` : ''}
+        ${has(clipName) ? `<video id="video" src="/files/${encodeURIComponent(bug.id)}/${clipName}" controls loop autoplay muted playsinline></video>
+        <div class="scrub" id="scrub" aria-hidden="true"><div class="head" id="head"></div></div>` : ''}
+        ${has('moment.jpg') ? `<p class="label" style="margin-top:16px">At the bug</p><img class="moment" src="/files/${encodeURIComponent(bug.id)}/moment.jpg" alt="The game's screen at the moment of the bug">` : ''}`;
+    }
+  } else if (view === 'report') {
+    main = `<label class="sr" for="reportText">Report (Markdown)</label>
+      <textarea class="field report" id="reportText" spellcheck="true">${esc(bug.report)}</textarea>
+      <div class="actions" style="margin-top:8px"><button class="btn" id="aSave" title="Save (Cmd+S)">Save report <kbd>⌘S</kbd></button>
+      <span class="msg">${bug.edited ? 'Your edits are kept: rebuilding won’t overwrite them.' : bug.ai ? 'Drafted by ' + esc(bug.ai.model) + ' on this Mac. Check it against the clip.' : ''}</span></div>`;
+  } else {
+    main = bug.log.length ? `<pre class="log">${bug.log.map((l, i) => `<div class="${l.hit ? 'hit' : ''}"><span>${i + 1}</span>${esc(l.text)}</div>`).join('')}</pre>`
+                          : '<p class="none">No log lines saved.</p>';
+  }
+  body.innerHTML = head + main;
+  wireDetail();
+}
+
+function wireDetail() {
+  const v = $('#video');
+  if (v) {
+    const scrub = $('#scrub');
+    const ticks = () => {
+      if (!v.duration || scrub.dataset.done) return;
+      scrub.dataset.done = 1;
+      const offset = clipName === 'full.mp4' ? v.duration - (bug.meta.clip_seconds || v.duration) : 0;   // full.mp4 ends where the clip ends
+      for (const t of bug.taps) { const x = (t + offset) / v.duration; if (x >= 0 && x <= 1) scrub.insertAdjacentHTML('beforeend', `<div class="tap" style="left:${x*100}%"></div>`); }
+      if (bug.bug_at != null) { const x = (bug.bug_at + offset) / v.duration; if (x >= 0 && x <= 1) scrub.insertAdjacentHTML('beforeend', `<div class="bug" style="left:calc(${x*100}% - 1px)" title="The bug"></div>`); }
+    };
+    v.addEventListener('loadedmetadata', ticks); ticks();
+    v.addEventListener('timeupdate', () => { if (v.duration) $('#head').style.left = (v.currentTime / v.duration * 100) + '%'; });
+    scrub.addEventListener('click', e => { const r = scrub.getBoundingClientRect(); if (v.duration) v.currentTime = (e.clientX - r.left) / r.width * v.duration; });
+  }
+  document.querySelectorAll('[data-clip]').forEach(b => b.onclick = () => { clipName = b.dataset.clip; renderDetail(); });
+  const on = (sel, fn) => { const el = $(sel); if (el) el.onclick = fn; };
+  on('#aExport', exportIssue); on('#aCopy', copyMd); on('#aAi', writeAi); on('#aDismiss', () => act('dismiss')); on('#aRestore', () => act('restore')); on('#aSave', saveReport);
+}
+
+function msg(text, err) { const m = $('#msg'); if (m) { m.textContent = text; m.className = 'msg' + (err ? ' err' : ''); } }
+
+async function act(what) {
+  const res = await post(`/api/bug/${encodeURIComponent(bug.id)}/${what}`);
+  if (!res.ok) return msg((await res.json()).error || 'That didn’t work.', true);
+  const idx = rows().findIndex(b => b.id === bug.id);
+  await refresh();
+  const next = rows()[Math.min(idx, rows().length - 1)];
+  bug = null; selected = null;
+  next ? select(next.id) : renderDetail();
+  $('#announce').textContent = what === 'dismiss' ? 'Moved to false alarms' : 'Moved back to bugs';
+}
+
+async function saveReport() {
+  const res = await post(`/api/bug/${encodeURIComponent(bug.id)}/report`, {text: $('#reportText').value});
+  if (!res.ok) return msg('Couldn’t save the report.', true);
+  bug = await res.json(); renderDetail(); msg('Report saved.');
+}
+
+async function writeAi() {
+  const b = $('#aAi'); b.disabled = true; b.setAttribute('aria-busy', 'true'); msg('WRITING… the local model takes 5–30 s.');
+  const res = await post(`/api/bug/${encodeURIComponent(bug.id)}/ai`);
+  const out = await res.json();
+  if (!res.ok) { b.disabled = false; return msg(out.error, true); }
+  bug = out; await refresh(); setView('report'); msg('Draft written. Check it against the clip before sending.');
+}
+
+async function copyMd() {
+  const text = view === 'report' && $('#reportText') ? $('#reportText').value : bug.report;
+  try { await navigator.clipboard.writeText(text); msg('Report copied as Markdown. Attach clip.mp4 and moment.jpg from the bug folder.'); }
+  catch { msg('Couldn’t reach the clipboard. Open the Report tab and copy it from there.', true); }
+}
+
+async function exportIssue() {
+  let res = await post(`/api/bug/${encodeURIComponent(bug.id)}/export`);
+  if (res.status === 409) {
+    const repo = prompt('Which GitHub repo do bugs go to? (owner/repo)\nNothing is posted: GitHub opens a prefilled issue for you to check and submit.', state.settings.github_repo || '');
+    if (!repo) return;
+    const s = await post('/api/settings', {github_repo: repo});
+    if (!s.ok) return msg((await s.json()).error, true);
+    state.settings.github_repo = repo;
+    res = await post(`/api/bug/${encodeURIComponent(bug.id)}/export`);
+  }
+  const out = await res.json();
+  if (!res.ok) return msg(out.error, true);
+  window.open(out.url, '_blank', 'noopener');
+  msg(`Opened a prefilled issue on ${state.settings.github_repo}. Attach clip.mp4 there before submitting.`);
+}
+
+async function mark() {
+  if (!state || !state.live) return;
+  const note = $('#markNote').value.trim();
+  const res = await post('/api/mark', {note});
+  $('#markNote').value = '';
+  $('#announce').textContent = res.ok ? 'Bug marked. The clip is saved in a few seconds.' : 'Not recording.';
+}
+
+function status(s, down) {
+  const el = $('#status');
+  if (down) { el.innerHTML = '<span class="warn">Dashboard lost: is Lens still running?</span>'; return; }
+  const L = s.live;
+  el.innerHTML = `
+    ${L ? `<span class="${L.connected ? 'ok' : 'warn'}">${L.connected ? 'Phone connected' : 'Phone disconnected'}</span>
+           <span>${esc(L.model)}</span><span>${esc(L.package)} ${esc(L.version)}</span>
+           <span>FPS ${L.fps != null ? Math.round(L.fps) : '--'}</span><span>Buffer 30 s</span>`
+        : `<span>Not recording</span><span>${s.bugs.length} bugs on disk</span>`}
+    <span>Reports: ${s.settings.github_repo ? 'GitHub ' + esc(s.settings.github_repo) : 'Markdown'}</span>
+    <span class="keys">J/K bugs · 1 2 3 views · E issue · A AI · X false alarm · F8 mark</span>`;
+}
+
+function move(delta) {
+  const r = rows(); if (!r.length) return;
+  const i = r.findIndex(b => b.id === selected);
+  const next = r[Math.max(0, Math.min(r.length - 1, i < 0 ? 0 : i + delta))];
+  if (next && next.id !== selected) select(next.id);
+}
+
+document.addEventListener('keydown', e => {
+  const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);
+  if (e.key === 'F8') { e.preventDefault(); return mark(); }
+  if ((e.metaKey || e.ctrlKey) && e.key === 's' && view === 'report' && bug) { e.preventDefault(); return saveReport(); }
+  if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === 'j') move(1); else if (k === 'k') move(-1);
+  else if (k === '1') setView('clip'); else if (k === '2') setView('report'); else if (k === '3') setView('log');
+  else if (bug && k === 'e') exportIssue(); else if (bug && k === 'c') copyMd(); else if (bug && k === 'a') writeAi();
+  else if (bug && k === 'x' && !bug.false_alarm) act('dismiss');
+  else return;
+  e.preventDefault();
+});
+$('#feed').addEventListener('click', e => { const r = e.target.closest('.row'); if (r) select(r.dataset.id); });
+$('#tabBugs').onclick = () => { list = 'bugs'; renderFeed(); };
+$('#tabFalse').onclick = () => { list = 'false'; renderFeed(); };
+document.querySelectorAll('[data-view]').forEach(t => t.onclick = () => setView(t.dataset.view));
+$('#markBtn').onclick = mark;
+$('#markNote').addEventListener('keydown', e => { if (e.key === 'Enter') mark(); });
+
+refresh().then(() => {
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (['clip', 'report', 'log'].includes(h.get('view'))) view = h.get('view');
+  document.querySelectorAll('[data-view]').forEach(t => t.setAttribute('aria-selected', t.dataset.view === view));
+  const want = h.get('bug');
+  if (want && state.false_alarms.some(b => b.id === want)) list = 'false';
+  const pick = rows().find(b => b.id === want) || rows()[0];
+  if (pick) select(pick.id);
+});
+setInterval(refresh, 1500);
+</script>
+</body>
+</html>

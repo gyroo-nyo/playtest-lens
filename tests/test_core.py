@@ -372,3 +372,46 @@ def test_only_local_models_write_reports(monkeypatch):
     assert writer.model() == 'qwen3:8b' and writer.models() == ['qwen3:8b', 'qwen2.5-coder:7b']
     tags['models'] = [{'name': 'deepseek-v3.1:671b-cloud'}]
     assert writer.model() is None
+
+
+def test_dashboard_server(tmp_path):
+    import urllib.request, urllib.error
+    from lens import ui
+    meta = {'model': 'X', 'android': '16', 'package': PKG, 'game_version': '1', 'serial': 'X'}
+    folder = bugs.write(tmp_path, Event('manual', 1763561000.0, note='Ball clips through the post'), meta, [], [], lambda out: False)
+    (folder / 'clip.mp4').write_bytes(bytes(range(256)) * 4)          # 1024 bytes standing in for a video
+    server, url = ui.serve(tmp_path, None, 0)
+    try:
+        def get(path, headers=None):
+            try:
+                with urllib.request.urlopen(urllib.request.Request(url + path.lstrip('/'), headers=headers or {})) as r:
+                    return r.status, dict(r.headers), r.read()
+            except urllib.error.HTTPError as e:
+                return e.code, dict(e.headers), e.read()
+        def post(path, body=b'{}', headers=None):
+            req = urllib.request.Request(url + path.lstrip('/'), body, {'Content-Type': 'application/json', **(headers or {})}, method='POST')
+            try:
+                with urllib.request.urlopen(req) as r:
+                    return r.status, r.read()
+            except urllib.error.HTTPError as e:
+                return e.code, e.read()
+        assert url.startswith('http://127.0.0.1:')
+        assert b'Playtest Lens' in get('/')[2]
+        state = json.loads(get('/api/state')[2])
+        assert state['live'] is None and state['bugs'][0]['title'] == 'Ball clips through the post'
+        code, headers, body = get(f'/files/{folder.name}/clip.mp4', {'Range': 'bytes=100-199'})
+        assert code == 206 and headers['Content-Range'] == 'bytes 100-199/1024' and body == (bytes(range(256)) * 4)[100:200]
+        assert get(f'/files/{folder.name}/clip.mp4')[0] == 200
+        assert get(f'/files/{folder.name}/meta.json')[0] == 404                      # only clips and the picture
+        assert get('/files/..%2F..%2Fetc/clip.mp4')[0] == 404
+        assert post(f'/api/bug/{folder.name}/dismiss')[0] == 403                      # no page header: another site
+        assert post('/api/mark', headers={'X-Lens': '1'})[0] == 409                  # not recording
+        assert post(f'/api/bug/{folder.name}/export', headers={'X-Lens': '1'})[0] == 409   # no repo set yet
+        assert post('/api/settings', b'{"github_repo": "a b"}', {'X-Lens': '1'})[0] == 400
+        assert post('/api/settings', b'{"github_repo": "superfusion/gfl-bugs"}', {'X-Lens': '1'})[0] == 200
+        code, body = post(f'/api/bug/{folder.name}/export', headers={'X-Lens': '1'})
+        assert code == 200 and json.loads(body)['url'].startswith('https://github.com/superfusion/gfl-bugs/issues/new?title=')
+        assert post(f'/api/bug/{folder.name}/dismiss', headers={'X-Lens': '1'})[0] == 200
+        assert json.loads(get('/api/state')[2])['false_alarms'][0]['id'] == folder.name
+    finally:
+        server.shutdown()
