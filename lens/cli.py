@@ -59,7 +59,7 @@ def cmd_watch(a):
     offset = adb.clock_offset(serial)
     print(f'Watching {a.package} {meta["game_version"]} on {model}. Mark a bug: {a.hotkey.upper()} or type "m <note>" + Enter. Wrong catch? "x" + Enter. Ctrl+C to stop.')
 
-    logs, touches = Ring(60), Ring(60)
+    logs, touches, rates = Ring(60), Ring(60), Ring(60)
     pids = {'set': adb.pids(serial, a.package)}
     detector = logcat.Detector(a.package)
     seen = freeze.Detector()
@@ -82,13 +82,13 @@ def cmd_watch(a):
         t0, t1 = ev.ts - BEFORE, ev.ts + AFTER
         tw = touches.window(t0, t1)
         folder = bugs.write(a.out, ev, meta, logs.window(ev.ts - 60, t1), tw,
-                            lambda out: video.cut(segments_for(rec.segments(), t0, t1), t0, t1, out), t0, BEFORE + AFTER)
+                            lambda out: video.cut(segments_for(rec.segments(), t0, t1), t0, t1, out, rates.window(t0 - 5, t1)), t0, BEFORE + AFTER)
         if ev.kind != 'manual':
             last_auto['folder'] = folder
         if ev.kind == 'manual':
             last_mark.update(folder=folder, ev=ev, touches=tw, t0=t0)
             f0 = ev.ts - FULL
-            video.cut(segments_for(rec.segments(), f0, t1), f0, t1, folder / 'full.mp4')
+            video.cut(segments_for(rec.segments(), f0, t1), f0, t1, folder / 'full.mp4', rates.window(f0 - 5, t1))
             bugs.update(folder, ev, meta, tw, True, t0, BEFORE + AFTER)   # lists full.mp4
         print(f'\n● {ev.kind.upper()} saved: {folder}', flush=True)
 
@@ -105,6 +105,7 @@ def cmd_watch(a):
         frames = freeze.game_frames(e.msg, a.package)
         if frames:
             seen.drawing(e.ts + offset, frames[0])
+            rates.add(e.ts + offset, frames[0])
             if (dropped := slow.drawing(e.ts + offset, *frames)):
                 print(f'\n● LAG caught: {bugs.title(dropped)}', flush=True)
                 catch(dropped)

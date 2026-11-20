@@ -271,3 +271,13 @@ def test_tapping_a_still_ad_is_not_a_freeze():
     still = [(t / 5, frame()) for t in range(0, 40)]
     assert play(det, still, [(2.0, 0.9, 0.1), (3.0, 0.9, 0.1), (4.0, 0.9, 0.1)], fps=lambda t: None) == []
     assert freeze.started('START u0 {act=android.intent.action.MAIN flg=0x10200000 cmp=superfusion.gfl/.AndroidLauncher}') == 'superfusion.gfl/.AndroidLauncher'
+
+
+def test_fps_meter_timeline():
+    from lens import meter
+    t0 = 100.0
+    steps = meter.timeline([(99.5, 47.2), (101.0, 46.8), (102.0, 15.3)], t0, t0 + 8)
+    assert [meter.label(f) for _, f in steps] == ['47 FPS', '15 FPS', '-- FPS']   # 46.8 rounds to 47: no change
+    assert steps[1][0] == 2.0 and steps[2][0] == 4.5    # "--" once readings stop for 2.5 s
+    assert meter.color(15) == (240, 70, 60) and meter.color(None) == (150, 150, 150)
+    assert meter.ppm('47 FPS', (0, 0, 0)).startswith(b'P6 ')

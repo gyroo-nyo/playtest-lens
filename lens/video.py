@@ -98,8 +98,9 @@ class Recorder(threading.Thread):
             p.terminate()
 
 
-def cut(segments, t0, t1, out):
-    """Join the segments and trim to [t0, t1]. Returns False when there is no video."""
+def cut(segments, t0, t1, out, fps=None):
+    """Join the segments and trim to [t0, t1]. Returns False when there is no video.
+    fps: [(host ts, game fps)] to burn an FPS meter into the top-left corner (re-encodes the clip)."""
     import shutil, tempfile
     # Snapshot the segments first (hard links, so no copying): the recorder prunes old ones
     # while ffmpeg is still reading, which broke clips ("Impossible to open seg…").
@@ -122,8 +123,15 @@ def cut(segments, t0, t1, out):
     listing.write_text(''.join(f"file '{p}'\n" for p, _ in kept))
     start = max(0.0, t0 - kept[0][1])
     # stdin=DEVNULL: ffmpeg reads the terminal for its own keys and would eat the tester's typing.
-    done = subprocess.run(['ffmpeg', '-loglevel', 'fatal', '-y', '-f', 'concat', '-safe', '0', '-i', str(listing),
-                           '-ss', f'{start:.2f}', '-t', f'{t1 - t0:.2f}', '-c', 'copy', '-movflags', '+faststart', str(out)],
-                          stdin=subprocess.DEVNULL)
+    cmd = ['ffmpeg', '-loglevel', 'fatal', '-y', '-f', 'concat', '-safe', '0', '-i', str(listing),
+           '-ss', f'{start:.2f}', '-t', f'{t1 - t0:.2f}']
+    if fps:
+        from . import meter
+        cmd += ['-f', 'concat', '-safe', '0', '-i', str(meter.write(fps, t0, t1, snap)),
+                '-filter_complex', '[1:v]setpts=PTS-STARTPTS[m];[0:v]setpts=PTS-STARTPTS[v];[v][m]overlay=24:24:eof_action=repeat',
+                '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p']
+    else:
+        cmd += ['-c', 'copy']
+    done = subprocess.run([*cmd, '-movflags', '+faststart', str(out)], stdin=subprocess.DEVNULL)
     shutil.rmtree(snap, ignore_errors=True)
     return done.returncode == 0

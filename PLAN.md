@@ -95,7 +95,7 @@ crashes, listens for the F8 mark, and writes one folder per bug.
 - **Manual mark:** F8 anywhere (pynput global hotkey), or `m` + Enter in the terminal. Then it asks
   for a one-line note.
 - **On a catch or mark:** wait for the "after" (3 s, plus the segment still being written), then write
-  `bugs/<time>_<kind>/` with `clip.mp4` (-12 s/+3 s, cut from the segments, with Android's "Show taps" dots), `step1.jpg…` (the frame at each of the last 5 taps with a red box on the spot), `logcat.txt` (60 s
+  `bugs/<time>_<kind>/` with `clip.mp4` (-12 s/+3 s, cut from the segments, with Android's "Show taps" dots and an FPS meter in the top-left from the game's frame-rate log), `step1.jpg…` (the frame at each of the last 5 taps with a red box on the spot), `logcat.txt` (60 s
   before + 3 s after), `touches.jsonl`, `meta.json` (device, Android version, game version, kind,
   matched lines, note), and `report.md` (what happened, the clip, picture steps; AI-written steps come in phase 3).
 - **Late marks:** a manual mark also saves `full.mp4`, the 30 s before it, for when F8 came late.
