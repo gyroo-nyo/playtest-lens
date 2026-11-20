@@ -15,6 +15,9 @@
     --error: #EE6A62; --caution: #E3B648; --advisory: #74B9C9; --normal: #86AA80;
     --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
     --sans: 'IBM Plex Sans', system-ui, sans-serif;
+    /* motion: presses snap in fast, release springs back with a small overshoot */
+    --spring: cubic-bezier(.34, 1.56, .64, 1);
+    --out: cubic-bezier(.16, 1, .3, 1);
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
@@ -54,16 +57,30 @@
   .frame > .b1 { bottom: 0; left: 0; border-width: 0 0 1px 1px; }
   .frame > .b2 { bottom: 0; right: 0; border-width: 0 1px 1px 0; }
   .frame.flash::before, .frame.flash::after, .frame.flash > .b1, .frame.flash > .b2 { border-color: var(--tertiary); }
+  .btn.marked { animation: mark-punch 420ms var(--spring); }
+  @keyframes mark-punch { 0% { transform: scale(1); } 25% { transform: scale(.86); } 60% { transform: scale(1.07); } 100% { transform: scale(1); } }
+  .frame .shutter { position: absolute; inset: 0; background: var(--primary); opacity: 0; pointer-events: none; }
+  .frame.snap .shutter { animation: shutter 380ms var(--out); }
+  @keyframes shutter { 0% { opacity: .28; } 100% { opacity: 0; } }
+  .frame::before, .frame::after, .frame > .b1, .frame > .b2 { transition: border-color 160ms ease-out, transform 320ms var(--spring); }
+  .frame.snap::before { transform: translate(6px, 6px); } .frame.snap::after { transform: translate(-6px, 6px); }
+  .frame.snap > .b1 { transform: translate(6px, -6px); } .frame.snap > .b2 { transform: translate(-6px, -6px); }
+  .frame.snap::before, .frame.snap::after, .frame.snap > .b1, .frame.snap > .b2 { border-color: var(--tertiary); }
   .mark-row { display: flex; gap: 8px; padding: 0 16px 16px; }
   .mark-row input { flex: 1; }
 
   /* controls */
   .btn { border: 0; border-radius: 2px; padding: 8px 12px; cursor: pointer; font: 500 11px/1.3 var(--mono); letter-spacing: .12em; text-transform: uppercase;
-         background: var(--raised); color: var(--primary); transition: background-color 120ms ease-out; }
+         background: var(--raised); color: var(--primary);
+         transition: background-color 120ms ease-out, color 120ms ease-out, transform 280ms var(--spring); }
   .btn:hover { background: #2E2B26; }
   .btn.primary { background: var(--tertiary); color: var(--surface); }
   .btn.primary:hover { background: var(--primary); }
   .btn:disabled { opacity: .45; cursor: default; }
+  /* clicky: every control squishes on press (mouse or its shortcut key) and springs back */
+  .btn:active:not(:disabled), .btn.pressed, .tab:active, .tab.pressed, .view:active, .view.pressed, .iconbtn:active {
+    transform: scale(.94); transition: background-color 120ms ease-out, transform 70ms ease-out; }
+  .tab, .view, .iconbtn { transition: color 120ms ease-out, background-color 120ms ease-out, transform 280ms var(--spring); }
   .btn kbd { font: inherit; opacity: .7; margin-left: 6px; }
   .btn.primary kbd { opacity: 1; }   /* .7 on orange is 3.8:1, under AA */
   input.field, textarea.field { background: var(--surface); color: var(--primary); border: 1px solid var(--border); border-radius: 2px; padding: 8px; }
@@ -76,7 +93,13 @@
   .feed { list-style: none; margin: 0; padding: 0; overflow-y: auto; max-height: 34vh; min-height: 96px; }
   .row { display: grid; grid-template-columns: 10px 64px 72px 1fr auto; align-items: center; gap: 8px; height: 32px; padding: 0 16px 0 14px;
          font-size: 13px; cursor: pointer; }
+  .row { transition: background-color 120ms ease-out; }
   .row:hover { background: var(--raised); }
+  .row:active { background: #2E2B26; }
+  .row.arrive { animation: arrive 520ms var(--out); }
+  @keyframes arrive { 0% { opacity: 0; transform: translateX(-12px); background: rgba(242,106,46,.22); } 60% { opacity: 1; transform: none; } 100% { background: transparent; } }
+  .detail-body.enter > * { animation: enter 220ms var(--out) both; }
+  @keyframes enter { from { opacity: 0; transform: translateY(6px); } }
   .row[aria-selected="true"] { background: var(--raised); box-shadow: inset 1px 0 0 var(--primary); color: var(--primary); font-weight: 600; }
   .row .dot { width: 4px; height: 4px; border-radius: 9999px; background: var(--tertiary); visibility: hidden; }
   .row.unread .dot { visibility: visible; }
@@ -109,11 +132,14 @@
   .scrub .bug { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--tertiary); }
   .detail-head { padding: 0 16px 0 4px !important; }
   .detail-head .label { flex: 0 0 auto !important; margin-left: auto; }
-  .views { display: flex; gap: 2px; }
+  .views { display: flex; gap: 2px; position: relative; }
+  .views .ink { position: absolute; left: 0; bottom: 0; height: 2px; width: 100px; background: var(--primary); transform-origin: 0 0;
+                transition: transform 300ms var(--out); pointer-events: none; }
   .view { background: none; border: 0; cursor: pointer; padding: 15px 14px 14px; font: 500 12px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase;
-          color: var(--secondary); box-shadow: inset 0 -2px 0 transparent; transition: color 120ms ease-out, box-shadow 120ms ease-out; }
+          color: var(--secondary); box-shadow: inset 0 -2px 0 transparent; }
   .view:hover { color: var(--primary); }
-  .view[aria-selected="true"] { color: var(--primary); box-shadow: inset 0 -2px 0 var(--primary); }
+  .view[aria-selected="true"] { color: var(--primary); }
+  .views:not(.has-ink) .view[aria-selected="true"] { box-shadow: inset 0 -2px 0 var(--primary); }
   .view kbd { font: inherit; color: var(--secondary); margin-left: 4px; }   /* faded secondary was under 4.5:1 */
   .clip-pick { display: flex; gap: 4px; margin: 8px 0 16px; }
   .moment { max-width: 100%; margin-top: 8px; display: block; }
@@ -145,6 +171,10 @@
   /* dialogs: the Discord preview and settings */
   dialog { background: var(--neutral); color: var(--on-surface); border: 1px solid var(--border); border-radius: 4px; padding: 0;
            width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 64px); }
+  dialog[open] { animation: dlg-in 260ms var(--spring); }
+  dialog[open]::backdrop { animation: fade-in 200ms ease-out; }
+  @keyframes dlg-in { from { opacity: 0; transform: scale(.94) translateY(8px); } }
+  @keyframes fade-in { from { opacity: 0; } }
   dialog::backdrop { background: rgba(20, 19, 17, .8); }   /* surface, 80% */
   dialog header { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
   dialog header .label { flex: 1; }
@@ -169,7 +199,10 @@
            font: 400 13px/1.45 var(--sans); animation: toast-in 180ms cubic-bezier(.16,1,.3,1); }
   .toast.err { border-color: rgba(238,106,98,.5); }
   .toast.err::before { content: 'Error  '; font: 500 11px/1 var(--mono); letter-spacing: .12em; color: var(--error); }
-  @keyframes toast-in { from { opacity: 0; transform: translateY(6px); } }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(14px) scale(.96); } }
+  .toast { transition: opacity 160ms ease-in, transform 160ms ease-in; }
+  .toast.leave { opacity: 0; transform: translateX(16px); }
+  .toast { animation-timing-function: var(--spring) !important; animation-duration: 340ms !important; }
 
   ::selection { background: rgba(242,106,46,.35); color: var(--primary); }
   * { scrollbar-color: var(--border) transparent; scrollbar-width: thin; }
@@ -185,7 +218,11 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .rec.on i { animation: none; }
-    .toast { animation: none; }
+    .toast, .btn.marked, .row.arrive, .detail-body.enter > *, dialog[open], dialog[open]::backdrop, .frame.snap .shutter { animation: none; }
+    .btn, .tab, .view, .iconbtn, .views .ink, .toast,
+    .frame::before, .frame::after, .frame > .b1, .frame > .b2 { transition: background-color 120ms, color 120ms, border-color 120ms, opacity 120ms; }
+    .btn:active:not(:disabled), .btn.pressed, .tab:active, .tab.pressed, .view:active, .view.pressed, .iconbtn:active { transform: none; }
+    .frame.snap::before, .frame.snap::after, .frame.snap > .b1, .frame.snap > .b2, .toast.leave { transform: none; }
     .btn { transition: none; }
   }
 </style>
@@ -203,7 +240,7 @@
         <div><span class="readout" id="clock">--:--:--</span><small class="label">Recording</small></div>
         <div><span class="readout" id="fps">--</span><small class="label">FPS</small></div>
       </div>
-      <div class="frame" id="frame"><span class="b1"></span><span class="b2"></span>
+      <div class="frame" id="frame"><span class="b1"></span><span class="b2"></span><span class="shutter" aria-hidden="true"></span>
         <p class="empty" id="frameEmpty">No phone recording. Plug it in with USB debugging on:<br>Lens picks it up by itself.</p>
       </div>
       <div class="mark-row" id="markRow">
@@ -232,6 +269,7 @@
           <button class="view" role="tab" data-view="clip" aria-selected="true">Video <kbd>1</kbd></button>
           <button class="view" role="tab" data-view="report" aria-selected="false">Report <kbd>2</kbd></button>
           <button class="view" role="tab" data-view="log" aria-selected="false">Log <kbd>3</kbd></button>
+          <span class="ink" aria-hidden="true"></span>
         </div>
         <span class="label" id="detailLabel">Bug</span>
       </header>
@@ -297,6 +335,18 @@ const seen = new Set((() => { try { return JSON.parse(localStorage.getItem('lens
 let firstLoad = true;
 function markSeen(id) { seen.add(id); try { localStorage.setItem('lens-seen', JSON.stringify([...seen].slice(-500))); } catch {} }
 
+const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+function replay(el, cls, ms) { if (!el) return; el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); setTimeout(() => el.classList.remove(cls), ms); }
+function press(sel) { replay(typeof sel === 'string' ? $(sel) : sel, 'pressed', 110); }   // a shortcut key presses its button
+function moveInk() {
+  const on = $('.views [aria-selected="true"]'), ink = $('.views .ink');
+  if (!on || !ink) return;
+  $('.views').classList.add('has-ink');
+  ink.style.transform = `translateX(${on.offsetLeft}px) scaleX(${on.offsetWidth / 100})`;
+}
+addEventListener('resize', moveInk);
+let rendered = new Set();
+
 function hhmmss(s) { s = Math.max(0, s|0); return [s/3600|0, (s%3600)/60|0, s%60].map(n => String(n).padStart(2,'0')).join(':'); }
 function shortTime(t) { return (t || '').slice(11, 19) || '--'; }
 
@@ -350,8 +400,10 @@ function renderFeed() {
     $('#feed').innerHTML = `<li class="none">${list === 'bugs' ? 'No bugs yet. Catches and F8 marks land here.' : 'No false alarms. Wrong catches you dismiss land here.'}</li>`;
     return;
   }
+  const fresh = rendered.size ? new Set(r.filter(b => !rendered.has(b.id)).map(b => b.id)) : new Set();
+  rendered = new Set(r.map(b => b.id));
   $('#feed').innerHTML = r.map(b => `
-    <li class="row ${seen.has(b.id) ? '' : 'unread'}" role="option" id="r-${esc(b.id)}" data-id="${esc(b.id)}" aria-selected="${b.id === selected}">
+    <li class="row ${seen.has(b.id) ? '' : 'unread'} ${fresh.has(b.id) ? 'arrive' : ''}" role="option" id="r-${esc(b.id)}" data-id="${esc(b.id)}" aria-selected="${b.id === selected}">
       <span class="dot" aria-hidden="true"></span>
       <span class="t">${esc(shortTime(b.time))}</span>
       <span class="chip k-${esc(b.kind)}">${CHIP[b.kind] || esc(b.kind.toUpperCase())}</span>
@@ -370,12 +422,15 @@ async function select(id) {
   const res = await fetch('/api/bug/' + encodeURIComponent(id));
   bug = res.ok ? await res.json() : null;
   renderDetail();
+  replay($('#detailBody'), 'enter', 400);
 }
 
 function setView(v) {
   view = v; remember();
   document.querySelectorAll('[data-view]').forEach(t => t.setAttribute('aria-selected', t.dataset.view === v));
+  moveInk();
   renderDetail();
+  replay($('#detailBody'), 'enter', 400);
 }
 
 function renderDetail() {
@@ -458,7 +513,7 @@ function wireDetail() {
 function msg(text, err) {
   const t = document.createElement('div'); t.className = 'toast' + (err ? ' err' : ''); t.textContent = text;
   $('#toasts').appendChild(t);
-  setTimeout(() => t.remove(), err ? 7000 : 4000);
+  setTimeout(() => { t.classList.add('leave'); setTimeout(() => t.remove(), calm() ? 0 : 170); }, err ? 7000 : 4000);
   while ($('#toasts').children.length > 3) $('#toasts').firstChild.remove();
 }
 
@@ -527,6 +582,7 @@ async function exportIssue() {
 
 async function mark() {
   if (!state || !state.live) return;
+  replay($('#markBtn'), 'marked', 450); replay($('#frame'), 'snap', 420);
   const res = await post('/api/mark', {note: ''});
   if (!res.ok) return msg('Not recording.', true);
   state.live.waiting_note = new Date().toTimeString().slice(0, 8);
@@ -640,10 +696,12 @@ document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 's' && view === 'report' && bug) { e.preventDefault(); return saveReport(); }
   if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
   const k = e.key.toLowerCase();
+  const tab = v => { press(`.views [data-view="${v}"]`); setView(v); };
   if (k === 'j') move(1); else if (k === 'k') move(-1);
-  else if (k === '1') setView('clip'); else if (k === '2') setView('report'); else if (k === '3') setView('log');
-  else if (bug && k === 'd') openDiscord(); else if (bug && k === 'e') exportIssue(); else if (bug && k === 'c') copyMd(); else if (bug && k === 'a') writeAi();
-  else if (bug && k === 'x' && !bug.false_alarm) act('dismiss');
+  else if (k === '1') tab('clip'); else if (k === '2') tab('report'); else if (k === '3') tab('log');
+  else if (bug && k === 'd') { press('#aDiscord'); openDiscord(); } else if (bug && k === 'e') { press('#aExport'); exportIssue(); }
+  else if (bug && k === 'c') { press('#aCopy'); copyMd(); } else if (bug && k === 'a') { press('#aAi'); writeAi(); }
+  else if (bug && k === 'x' && !bug.false_alarm) { press('#aDismiss'); setTimeout(() => act('dismiss'), 120); }
   else return;
   e.preventDefault();
 });
@@ -674,6 +732,7 @@ refresh().then(() => {
   if (want && state.false_alarms.some(b => b.id === want)) list = 'false';
   const pick = rows().find(b => b.id === want) || rows()[0];
   if (pick) select(pick.id);
+  requestAnimationFrame(moveInk);
 });
 setInterval(refresh, 1500);
 </script>
