@@ -16,13 +16,14 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import bugs, discord
+from . import bugs, checks, discord
 
 PAGE = Path(__file__).parent / 'web' / 'index.html'
 FONTS = Path(__file__).parent / 'web' / 'fonts'
 FILES = {'clip.mp4', 'full.mp4', 'moment.jpg'}
 PUBLIC = ('github_repo', 'package', 'discord_details')   # settings the page may see; the Discord webhook is a secret
 PORT = 8737
+CHECKS = threading.Lock()      # the page can send two clicks at once: one read-modify-write of .checks.json at a time
 
 
 class Live:
@@ -33,18 +34,19 @@ class Live:
         self.started = time.time()
         self.fps = None
         self.fps_ts = 0.0
-        self.frame = None          # path of the latest full-size frame
-        self.frame_ts = 0.0
         self.connected = True
+        self.video = True           # frames are arriving (False: the stream died or the screen sat still)
+        self.health = None          # the latest phone health reading (health.py)
+        self.alarm = False          # a real outage: the game is drawing (or the phone dropped off) and no video arrives
         self.caught = []           # (ts, kind, title) of this session's catches, newest last
         self.note = None           # add_note(text): the comment for the latest mark
         self.marks = None          # marks.Marks: which mark is waiting for a comment
 
     def state(self):
         now = time.time()
-        return {'package': self.package, 'version': self.version, 'model': self.model, 'connected': self.connected,
+        return {'package': self.package, 'version': self.version, 'model': self.model, 'connected': self.connected, 'video': self.video, 'alarm': self.alarm, 'health': self.health,
                 'fps': self.fps if now - self.fps_ts < 3 else None, 'recording_for': round(now - self.started),
-                'frame_ts': self.frame_ts, 'caught': self.caught[-20:], 'waiting_note': self.waiting_note()}
+                'caught': self.caught[-20:], 'waiting_note': self.waiting_note()}
 
     def waiting_note(self):
         return self.marks.waiting() if self.marks else None
@@ -67,6 +69,35 @@ def reveal(path):
         subprocess.run(['open', '-R', str(path)], stdin=subprocess.DEVNULL)
     elif sys.platform == 'win32':
         subprocess.run(f'explorer /select,"{path}"', stdin=subprocess.DEVNULL)   # explorer wants the path glued to /select,
+
+
+def copy_file(path):
+    """Put the file itself on the clipboard, so ⌘V / Ctrl+V in Discord attaches it. False if that didn't work."""
+    if sys.platform == 'darwin':
+        # AppleScript's `set the clipboard to POSIX file` left the clipboard empty about 1 time in 5 while saying it
+        # worked, so write the file URL through NSPasteboard and read it back to be sure.
+        cmd = ['osascript', '-l', 'JavaScript', '-e', MAC_COPY, str(Path(path).resolve())]
+        for _ in range(3):
+            r = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding='utf-8')
+            if r.stdout.strip() == 'ok':
+                return True
+        return False
+    elif sys.platform == 'win32':
+        cmd = ['powershell', '-NoProfile', '-Command', 'Set-Clipboard -LiteralPath $args[0]', str(Path(path).resolve())]
+    else:
+        return False
+    return subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True).returncode == 0
+
+
+MAC_COPY = """ObjC.import('AppKit');
+function run(a) {
+  const pb = $.NSPasteboard.generalPasteboard;
+  pb.clearContents;
+  const url = $.NSURL.fileURLWithPath(a[0]);
+  const ok = pb.writeObjects($([url]));
+  const got = pb.stringForType('public.file-url');
+  return (ok && got.js === url.absoluteString.js) ? 'ok' : 'fail';
+}"""
 
 
 def public(root):
@@ -107,7 +138,16 @@ def detail(root, bug_id):
             t = json.loads(line)
             if t.get('type') == 'down' and t['host_ts'] >= t0:
                 taps.append(round(t['host_ts'] - t0, 2))
-    log = (read('logcat.txt') or '').splitlines()[-400:]
+    full_log = (read('logcat.txt') or '').splitlines()
+    log = full_log[-400:]
+    # The game's own lines: anything its process wrote (any game, any engine), plus lines that name it, like
+    # `adb logcat | grep -Ei "<package>|libgdx|lerr|laux|androidruntime|system.err|system.out"`
+    game_pids = {str(x) for x in m.get('pids') or []}
+    game = re.compile('|'.join([re.escape(m.get('package') or 'superfusion.gfl'), 'libgdx', 'lerr', 'laux', 'androidruntime',
+                                r'system\.err', r'system\.out']), re.I)
+    lens_own = re.compile(r' adbd\s*:|BufferQueueProducer')     # Lens's own adb commands and the FPS readings it takes
+    pid_of = lambda l: (l.split()[1:2] or [''])[0]
+    game_log = [l for l in full_log if (pid_of(l) in game_pids or game.search(l)) and not lens_own.search(l)][-1500:]
     matched = set(m.get('matched_lines') or [])
     return {
         'id': bug_id, 'false_alarm': folder.parent.name == bugs.FALSE, 'meta': m,
@@ -117,6 +157,7 @@ def detail(root, bug_id):
         'discord': json.loads(read('discord.json') or 'null'),
         'bug_at': round(ev_ts - t0, 2) if ev_ts and t0 is not None else None, 'taps': taps,
         'log': [{'text': l, 'hit': any(x and x in l for x in matched)} for l in log],
+        'game_log': [{'text': l, 'hit': any(x and x in l for x in matched)} for l in game_log],
     }
 
 
@@ -171,6 +212,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send(403, {'error': 'forbidden'})
         return False
 
+    def checks_state(self, data):
+        build = self.live.version if self.live else data.get('last_build')
+        return {**data, 'build': build, 'recording': bool(self.live), 'report': checks.report(data, build) if build else ''}
+
     def do_HEAD(self):
         self.do_GET()
 
@@ -183,6 +228,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/api/state':
             return self.send(200, {'live': self.live.state() if self.live else None, **bugs.listing(self.root),
                                    'settings': public(self.root)})
+        if path == '/api/checks':
+            return self.send(200, self.checks_state(checks.load(self.root)))
         if m := re.fullmatch(r'/api/bug/([^/]+)', path):
             d = detail(self.root, urllib.parse.unquote(m.group(1)))
             return self.send(200 if d else 404, d)
@@ -194,11 +241,6 @@ class Handler(BaseHTTPRequestHandler):
         if m := re.fullmatch(r'/fonts/([a-z0-9-]+\.woff2)', path):
             font = FONTS / m.group(1)
             return self.file(font, 'font/woff2') if font.exists() else self.send(404, {'error': 'no such font'})
-        if path == '/live.jpg':
-            frame = self.live and self.live.frame
-            if not frame or not Path(frame).exists():
-                return self.send(404, {'error': 'no live frame'})
-            return self.file(Path(frame), 'image/jpeg')
         self.send(404, {'error': 'not found'})
 
     def do_POST(self):
@@ -240,6 +282,46 @@ class Handler(BaseHTTPRequestHandler):
                 changes['discord_webhook'] = hook
             save_settings(self.root, **changes)
             return self.send(200, public(self.root))
+        if path == '/api/checks':
+            # {'add': text} | {'remove': id} | {'id': id, 'result': 'pass' | 'fail' | ''}. A fail is marked as a bug, with its clip.
+            with CHECKS:
+                data = checks.load(self.root)
+                build = self.live.version if self.live else data.get('last_build')
+                if 'add' in body:
+                    if not checks.add(data, body['add']):
+                        return self.send(400, {'error': 'Write the check first (and not one that\'s already on the list).'})
+                else:
+                    try:
+                        cid = int(body.get('id') if 'remove' not in body else body['remove'])
+                    except (TypeError, ValueError):
+                        return self.send(400, {'error': 'Which check?'})
+                    check = next((c for c in data['checks'] if c['id'] == cid), None)
+                    if not check:
+                        return self.send(404, {'error': 'That check is gone.'})
+                    if 'remove' in body:
+                        checks.remove(data, cid)
+                    else:
+                        res = body.get('result') or None
+                        if res not in (None, 'pass', 'fail'):
+                            return self.send(400, {'error': 'Pass or fail?'})
+                        if not build:
+                            return self.send(409, {'error': 'Start Lens with the phone plugged in, so it knows which build this is.'})
+                        checks.result(data, build, cid, res)
+                        if res == 'fail' and self.live and self.live.mark:
+                            self.live.mark(f"Check failed: {check['text']}")
+                checks.save(self.root, data)
+                return self.send(200, self.checks_state(data))
+        if path == '/api/cleanup':
+            # Delete old bugs: {'when': 'today' | 'week' | 'all', 'dry': true} counts them first, then they go to the Trash.
+            when = body.get('when')
+            if when not in ('today', 'week', 'all'):
+                return self.send(400, {'error': 'Pick which bugs to delete.'})
+            found = bugs.older(self.root, when)
+            if not body.get('dry'):
+                found = [Path(p) for p in bugs.trash(found)]
+            n_false = sum(1 for f in found if f.parent.name == bugs.FALSE)
+            return self.send(200, {'bugs': len(found) - n_false, 'false_alarms': n_false,
+                                   'mb': round(sum(x.stat().st_size for f in found if f.exists() for x in f.iterdir() if x.is_file()) / 1048576)})
         m = re.fullmatch(r'/api/bug/([^/]+)/(report|note|dismiss|restore|rebuild|ai|export|discord|discord-text|discord-clip)', path)
         if not m:
             return self.send(404, {'error': 'not found'})
@@ -271,10 +353,16 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, {'text': discord.message(bugs.find(self.root, bug_id), details)})
         elif action == 'discord-clip':
             # For pasting by hand: the clip small enough for Discord, shown in Finder / Explorer to drag in.
-            clip = discord.small_clip(bugs.find(self.root, bug_id))
+            name = body.get('file', 'clip.mp4')
+            if name not in ('clip.mp4', 'full.mp4'):
+                return self.send(400, {'error': 'Pick the 15 s clip or the 30 s before.'})
+            clip = discord.small_clip(bugs.find(self.root, bug_id), name)
             if not clip:
                 return self.send(404, {'error': 'This bug has no clip.'})
-            if body.get('reveal', True):
+            if body.get('copy'):
+                if not copy_file(clip):
+                    return self.send(500, {'error': 'Couldn\'t put the clip on the clipboard. Use Send to Discord, Copy text to find it in Finder.'})
+            elif body.get('reveal', True):
                 reveal(clip)
             return self.send(200, {'file': clip.name, 'mb': round(clip.stat().st_size / 1048576, 1)})
         elif action == 'discord':

@@ -61,19 +61,27 @@ def message(folder, details=False):
     return text if len(text) <= MAX_CHARS else text[:MAX_CHARS - 1] + '…'
 
 
-def small_clip(folder):
-    """The clip as it is when it fits next to the picture, else discord.mp4: 1280 px wide, bitrate capped
-    so 15 s stays well under the limit."""
+def small_clip(folder, name='clip.mp4'):
+    """The video (clip.mp4, or full.mp4: the 30 s before) as it is when it fits under Discord's limit, else a
+    1280 px copy (discord.mp4 / discord-full.mp4) with the bitrate capped by its length so it stays well under."""
     folder = Path(folder)
-    src, out = folder / 'clip.mp4', folder / 'discord.mp4'
+    src = folder / name
+    out = folder / ('discord.mp4' if name == 'clip.mp4' else f'discord-{Path(name).stem}.mp4')
     if not src.exists():
         return None
     if src.stat().st_size <= LIMIT - 1024 * 1024:
         return src
     if out.exists() and out.stat().st_mtime >= src.stat().st_mtime:
         return out
+    probe = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', str(src)],
+                           stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding='utf-8').stdout
+    try:
+        seconds = float(probe)
+    except ValueError:
+        seconds = 15.0
+    rate = int(7000 * 15 / max(15.0, seconds))      # 7000k for 15 s (about 13 MB); longer videos get less per second
     ok = subprocess.run(['ffmpeg', '-nostdin', '-loglevel', 'fatal', '-y', '-i', str(src), '-vf', "scale='min(1280,iw)':-2",
-                         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-maxrate', '7000k', '-bufsize', '14000k',
+                         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-maxrate', f'{rate}k', '-bufsize', f'{2 * rate}k',
                          '-pix_fmt', 'yuv420p', '-an', '-movflags', '+faststart', str(out)], stdin=subprocess.DEVNULL).returncode == 0
     return out if ok else None
 

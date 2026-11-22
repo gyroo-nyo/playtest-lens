@@ -8,7 +8,10 @@ while it draws). A frozen game stops drawing, so those lines stop or drop to ~0.
 Lens reports only when all of this holds:
 - 3+ taps (the tester is trying to play),
 - the whole screen stays the same for STILL_FOR seconds (Show-taps dots ignored),
-- the game drew under DRAWING fps over that time (or stopped logging frames at all).
+- the game drew no frame at all after the first of those taps.
+  Not a frame-rate limit: GFL's still screens draw only when touched (libGDX redraws on input), as slowly as
+  0.16 fps, so a still play-calling screen logged 1.4 fps and looked frozen under the old 2 fps rule.
+  A frozen game can't draw at all, so one frame after the taps means it's alive.
 Phones that never log the frame rate get no automatic freeze reports: better none than wrong ones.
 Stuck buttons are not detected: a tap on a dead spot and a tap on a broken button look the same.
 """
@@ -22,8 +25,8 @@ STILL = 1.0        # mean pixel change (0..255) below this: the screen did not c
 STILL_FOR = 3.0    # seconds the whole screen must stay the same
 TAPS = 3           # taps during that time
 DOT = 9            # pixels ignored around each touch (the Show-taps dot)
-DRAWING = 2.0      # game frame rate at or above this: the game is still drawing, not frozen
 COOLDOWN = 10.0    # one bug per freeze, not one per tap
+TICK = 0.25        # seconds without a new frame before the last one is checked again
 
 
 def game_frames(msg, package):
@@ -111,10 +114,17 @@ class Detector:
             return None                     # something moved: the game is alive
         if not self.logs_fps or self.away:
             return None                     # can't confirm it, or the game is behind an ad / another app
-        if any(f >= DRAWING for t, f in self.fps if t >= first):
-            return None                     # still drawing: a still screen, not a freeze
+        if any(t >= first for t, _ in self.fps):
+            return None                     # it drew a frame after the taps: a still screen, not a freeze
         return self.caught('freeze', first, f'The game froze: {len(downs)} taps in {ts - first:.0f} s, '
                                             f'nothing on screen changed and the game stopped drawing frames')
+
+    def tick(self, ts):
+        """Call a few times a second. Android's screen recorder sends no frame while nothing on screen changes, and a
+        frozen game changes nothing, so with no new frame the last one is what's showing: check it again, now."""
+        if self.frames and ts - self.frames[-1][0] >= TICK:
+            return self.frame(ts, self.frames[-1][1])
+        return None
 
     def at(self, ts):
         """The last frame at or before `ts`."""

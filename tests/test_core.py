@@ -58,7 +58,7 @@ def test_find_touchscreen():
 
 def test_touches_first_finger_only():
     tr = Tracker(1079, 2399)
-    out = [ev for line in (FX / 'touches.txt').read_text(encoding='utf-8').splitlines() if (ev := tr.feed(line))]
+    out = [ev for line in (FX / 'touches.txt').read_text(encoding='utf-8').splitlines() for ev in tr.feed(line)]
     assert [e['type'] for e in out] == ['down', 'move', 'up']
     assert out[0]['x'] == round(0x21c / 1079, 4) and out[0]['y'] == round(0x4b0 / 2399, 4)
 
@@ -112,6 +112,14 @@ def test_cut_survives_pruned_segments(tmp_path):
     from lens import video
     assert video.cut([], 0, 1, tmp_path / 'a.mp4') is False
     assert video.cut([(str(tmp_path / 'gone.ts'), 0.0, 2.0)], 0, 1, tmp_path / 'b.mp4') is False
+    (tmp_path / 'empty.ts').write_bytes(b'')              # a segment the dead stream left at 0 bytes
+    assert video.cut([(str(tmp_path / 'empty.ts'), 0.0, 2.0)], 0, 1, tmp_path / 'c.mp4') is False
+
+
+def test_lost_video_sounds_once_per_outage():
+    from lens import alert
+    lost = alert.Incident()
+    assert [lost.update(b) for b in (False, True, True, True, False, True)] == [False, True, False, False, False, True]
 
 
 def test_report_says_what_the_tester_pressed(tmp_path):
@@ -157,8 +165,9 @@ def frame(shade=50, box=None):
 
 def play(det, frames, taps, fps=None):
     """frames: [(t, frame)], taps: [(t, x, y)], fps: f(t) -> the game's frame rate each second
-    (default: the game froze at 1.5 s). Feeds them in time order; returns the events."""
-    fps = fps or (lambda t: 0.0 if t >= 1.5 else 47.0)
+    (default: the game froze at 1.5 s: no more lines, since Android logs one only when the game hands over a frame).
+    Feeds them in time order; returns the events."""
+    fps = fps or (lambda t: None if t >= 1.5 else 47.0)
     events = []
     feed = [(t, 'tap', (x, y)) for t, x, y in taps] + [(t, 'frame', f) for t, f in frames]
     feed += [(t / 1.0, 'fps', fps(t)) for t in range(0, int(max(t for t, _ in frames)) + 1)]
@@ -326,7 +335,10 @@ def test_magenta_missing_texture():
     grass, pink = bytes([60, 140, 60]), bytes([255, 0, 255])
     n = glitch.W * glitch.H
     assert glitch.Detector().check(1.0, pink * (n // 10) + grass * (n - n // 10)).kind == 'glitch'
-    assert glitch.Detector().check(1.0, pink * (n // 100) + grass * (n - n // 100)) is None   # a pink jersey or logo
+    assert glitch.Detector().check(1.0, pink * (n // 200) + grass * (n - n // 200)).kind == 'glitch'   # one player's texture
+    hot_pink = bytes([255, 20, 147])          # a real pink jersey isn't missing-texture magenta
+    assert glitch.Detector().check(1.0, hot_pink * (n // 10) + grass * (n - n // 10)) is None
+    assert glitch.Detector().check(1.0, pink * (n // 5000) + grass * (n - n // 5000)) is None    # a few stray pixels
     det = glitch.Detector()
     det.check(1.0, pink * n)
     assert det.check(5.0, pink * n) is None            # one report, not one every 3 s
@@ -398,7 +410,7 @@ def test_dashboard_server(tmp_path):
         assert get('/api/state', {'Host': 'evil.example'})[0] == 403                  # DNS rebinding
         assert post(f'/api/bug/{folder.name}/dismiss', headers={'X-Lens': '1', 'Host': 'evil.example'})[0] == 403
         assert b'Playtest Lens' in get('/')[2]
-        assert get('/fonts/silkscreen-700-latin.woff2')[0] == 200 and get('/fonts/nope.woff2')[0] == 404   # fonts ship with Lens
+        assert get('/fonts/rajdhani-700.woff2')[0] == 200 and get('/fonts/nope.woff2')[0] == 404   # fonts ship with Lens
         state = json.loads(get('/api/state')[2])
         assert state['live'] is None and state['bugs'][0]['title'] == 'Ball clips through the post'
         code, headers, body = get(f'/files/{folder.name}/clip.mp4', {'Range': 'bytes=100-199'})
@@ -479,6 +491,8 @@ def test_discord_message_and_send(tmp_path):
         with mock.patch.object(discord, 'LIMIT', 1024 * 1024 + 10):       # too big: re-encoded to fit
             small = discord.small_clip(folder)
         assert small.name == 'discord.mp4' and small.stat().st_size < discord.LIMIT
+        (folder / 'full.mp4').write_bytes((folder / 'clip.mp4').read_bytes())
+        assert discord.small_clip(folder, 'full.mp4').name == 'full.mp4'  # the 30 s before, not the 15 s clip
     ui.save_settings(tmp_path, discord_webhook=hook)
     assert ui.public(tmp_path) == {'discord': True}                    # the page never sees the webhook
 
@@ -495,3 +509,240 @@ def test_ocr_reader_per_os(monkeypatch):
     assert text.boxes({'lines': [one, one]}) == [('DIVE', .1, .2, .3, .04)] * 2
     assert text.boxes({'lines': one}) == [('DIVE', .1, .2, .3, .04)]          # PowerShell's one-line list
     assert text.boxes({'lines': None}) == []
+
+
+def test_tracker_second_finger_taps_while_thumb_held():
+    """GFL: the thumb stays on the joystick (slot 0) while the other hand taps JUMP (slot 1)."""
+    lines = """[  1.000000] EV_ABS       ABS_MT_SLOT          00000000
+[  1.000000] EV_ABS       ABS_MT_TRACKING_ID   00000010
+[  1.000000] EV_ABS       ABS_MT_POSITION_X    00000064
+[  1.000000] EV_ABS       ABS_MT_POSITION_Y    00000064
+[  1.000000] EV_SYN       SYN_REPORT           00000000
+[  1.100000] EV_ABS       ABS_MT_POSITION_X    00000070
+[  1.100000] EV_ABS       ABS_MT_SLOT          00000001
+[  1.100000] EV_ABS       ABS_MT_TRACKING_ID   00000011
+[  1.100000] EV_ABS       ABS_MT_POSITION_X    00000300
+[  1.100000] EV_ABS       ABS_MT_POSITION_Y    00000600
+[  1.100000] EV_SYN       SYN_REPORT           00000000
+[  1.200000] EV_ABS       ABS_MT_TRACKING_ID   ffffffff
+[  1.200000] EV_SYN       SYN_REPORT           00000000
+[  1.300000] EV_ABS       ABS_MT_SLOT          00000000
+[  1.300000] EV_ABS       ABS_MT_POSITION_Y    00000070
+[  1.300000] EV_SYN       SYN_REPORT           00000000""".splitlines()
+    tr = Tracker(1079, 2399)
+    out = [(e['type'], e['finger']) for line in lines for e in tr.feed(line)]
+    assert out == [('down', 0), ('move', 0), ('down', 1), ('up', 1), ('move', 0)]
+
+
+def test_situation_skips_the_fps_meter():
+    from lens.describe import situation
+    lines = [('415 FPS', 0.01, 0.01, 0.07, 0.03), ('160 FFS', 0.01, 0.02, 0.07, 0.03), ('60 FPSmmm', 0.01, 0.01, 0.2, 0.03), ('1:25 Q2', 0.4, 0.01, 0.1, 0.03), ('CHICAGO', 0.6, 0.01, 0.1, 0.03)]
+    assert situation(lines) == '1:25 Q2 · CHICAGO'
+    from lens.describe import no_meter
+    assert [no_meter(t) for t in ['59 FPSOWN AND 10', 'f60 FPSS', '60 FP59', '60 FPSIN', '160 FFS', '1:25 Q2', '14']] == \
+        ['OWN AND 10', '', '', '', '', '1:25 Q2', '14']
+
+
+def test_crash_lines_skip_other_apps():
+    """A real `am crash` on GFL: other apps' 'libc: Access denied' lines in the same seconds aren't part of it."""
+    from lens.logcat import Detector, parse
+    raw = """1795332489.881 27599 27599 E AndroidRuntime: FATAL EXCEPTION: main
+1795332489.881 27599 27599 E AndroidRuntime: Process: superfusion.gfl, PID: 27599
+1795332489.881 27599 27599 E AndroidRuntime: android.app.RemoteServiceException$CrashedByAdbException: shell-induced crash
+1795332490.182 18662 18662 W libc    : Access denied finding property "qemu.hw.mainkeys"
+1795332491.606  2750  2799 W libc    : Access denied finding property "ro.odm.tr_game.controller.feature.support"
+1795332489.882 27599 27599 I ExceptionHandle: at android.os.Looper.loop(Looper.java:440)""".splitlines()
+    d, ev = Detector('superfusion.gfl'), None
+    for line in raw:
+        e = parse(line)
+        ev = d.feed(e, e.ts, {27599}) or ev
+    assert ev.kind == 'crash' and len(ev.lines) == 4 and not any('libc' in l for l in ev.lines)
+
+
+def _freeze_run(fps_after=None, taps=(11.0, 12.0, 13.0, 14.0), away=False, moving=False):
+    """GFL with the thumb held on the joystick; at 10 s the picture stops. Frames arrive like Android's screen
+    recorder sends them: 5 a second while the picture changes, afterwards only when a tap dot appears or goes,
+    and Lens ticks 4 times a second in between. fps_after: the game's frame rate after 10 s (None: no lines)."""
+    import random
+    from lens import freeze
+    W, H = freeze.W, freeze.H
+
+    def frame(seed, dot=None):
+        r = random.Random(seed)
+        b = bytearray(r.randrange(40, 200) for _ in range(W * H))
+        if dot:
+            cx, cy = int(dot[0] * W), int(dot[1] * H)
+            for y in range(cy - 3, cy + 4):
+                for x in range(cx - 3, cx + 4):
+                    b[y * W + x] = 255
+        return bytes(b)
+
+    d, out, still = freeze.Detector(), [], frame(10)
+    d.touch(0.0, {'type': 'down', 'x': 0.15, 'y': 0.8})
+    events = [(round(i * 0.2, 2), 'f', frame(i)) for i in range(50)]
+    if away:     # an ad opens over the game at 10 s and sits still
+        events.append((10.0, 'open', 'com.google.android.gms/.ads.AdActivity'))
+    events += [(float(s), 'fps', 58.0) for s in range(10)]
+    if fps_after == 'on_taps':     # real, 22 Nov: still play-calling screen, the game draws a frame per tap (1.4-1.6 fps)
+        events += [(12.63, 'fps', 1.62), (14.02, 'fps', 1.43)]
+    elif fps_after is not None:
+        events += [(float(s), 'fps', fps_after) for s in range(10, 20)]
+    for t in taps:
+        events += [(t, 'down', None), (t + 0.02, 'f', frame(10, (0.8, 0.75))), (t + 0.1, 'up', None), (t + 0.12, 'f', still)]
+    if moving:   # the picture keeps changing (a replay, a cut-scene): frames keep coming
+        events += [(round(10 + i * 0.2, 2), 'f', frame(1000 + i)) for i in range(50)]
+    events += [(round(10 + i * 0.25, 2), 'tick', None) for i in range(40)]
+    for ts, kind, x in sorted(events, key=lambda e: e[0]):
+        if kind == 'f':
+            ev = d.frame(ts, x)
+        elif kind == 'tick':
+            ev = d.tick(ts)
+        elif kind == 'fps':
+            ev = d.drawing(ts, x)
+        elif kind == 'open':
+            ev = d.opened(x, 'superfusion.gfl')
+        else:
+            ev = d.touch(ts, {'type': kind, 'x': 0.8, 'y': 0.75})
+        if ev:
+            out.append(ev)
+    return out
+
+
+def test_freeze_caught_when_the_recorder_sends_no_frames():
+    out = _freeze_run()
+    assert len(out) == 1 and out[0].kind == 'freeze' and 11 <= out[0].ts <= 12
+
+
+def test_no_freeze_on_a_still_screen_the_game_still_draws():
+    assert _freeze_run(fps_after=58.0) == []        # GFL's pre-snap screen: still picture, game drawing
+
+
+def test_no_freeze_on_a_still_screen_that_draws_only_when_tapped():
+    assert _freeze_run(fps_after='on_taps', taps=(12.0, 13.23, 14.61)) == []
+
+
+def test_no_freeze_while_an_ad_is_on_top():
+    assert _freeze_run(away=True) == []
+
+
+def test_no_freeze_while_the_picture_moves():
+    assert _freeze_run(moving=True) == []
+
+
+def test_no_freeze_with_too_few_taps():
+    assert _freeze_run(taps=(11.0, 12.5)) == []
+
+
+def test_delete_old_bugs(tmp_path, monkeypatch):
+    import time as t
+    now = t.mktime(t.strptime('2026-11-22 13:00:00', '%Y-%m-%d %H:%M:%S'))
+    for name in ['20261110-090000_manual', '20261121-235900_crash', '20261122-080000_manual', '20261122-125930_manual',
+                 '_false_alarms/20261101-100000_freeze', '_false_alarms/20261122-090000_lag']:
+        (tmp_path / name).mkdir(parents=True)
+        (tmp_path / name / 'meta.json').write_text('{}')
+    (tmp_path / '.lens.json').write_text('{}')
+    names = lambda when: sorted(f.name for f in bugs.older(tmp_path, when, now))
+    assert names('week') == ['20261101-100000_freeze', '20261110-090000_manual']
+    assert names('today') == ['20261101-100000_freeze', '20261110-090000_manual', '20261121-235900_crash']
+    assert '20261122-125930_manual' not in names('all') and len(names('all')) == 5   # saved 30 s ago: maybe still writing
+    monkeypatch.setattr('sys.platform', 'linux')      # plain delete: tests must not fill the real Trash
+    gone = bugs.trash(bugs.older(tmp_path, 'week', now))
+    assert len(gone) == 2 and not (tmp_path / '20261110-090000_manual').exists() and (tmp_path / '.lens.json').exists()
+
+
+
+# Real lines from the Infinix X6870 (GFL's saved logs, 21-22 Nov)
+REAL_SWIPE = '1795331676.065  3595  3687 I rms_SwipeUpCleanPolicy:  kill proc pid: 1890,uid 10465 proc: superfusion.gfl'
+REAL_REMOVE = '1795331676.085  2750  2799 I ActivityManager: Killing 1890:superfusion.gfl/u0a465 (adj 700): remove task'
+REAL_EXIT = '1795331784.197 27009  8663 I superfusion.gfl: System.exit called, status: 0'
+REAL_DIED = '1795331784.514  2750  2799 I ActivityManager: Process superfusion.gfl (pid 27009) has died: fg  TOP '
+REAL_MEMORY_FOR_LAUNCH = '1795284683.096  3595  3652 I rms_NormalReclaimer: doFastKill: , package: superfusion.gfl, uid: 10465, gap: 1057.2MB'
+
+
+def _gone(lines, crash_at=None):
+    from lens import gone
+    d, out = gone.Detector('superfusion.gfl'), []
+    for line in lines:
+        e = logcat.parse(line)
+        if crash_at is not None and e.ts >= crash_at:
+            d.crash(crash_at)
+            crash_at = None
+        if (ev := d.feed(e, e.ts, {27009})):
+            out.append(ev)
+    return out
+
+
+def test_game_closed_on_screen():
+    [ev] = _gone([REAL_DIED])
+    assert ev.kind == 'closed' and 'while on screen' in ev.lines[0]
+
+
+def test_games_own_clean_exit_is_not_a_bug():
+    assert _gone([REAL_EXIT, REAL_DIED]) == []          # 22 Nov 12:46: GFL called System.exit(0), reopened 15 s later
+
+
+def test_exit_with_an_error_code_is_a_bug():
+    assert len(_gone([REAL_EXIT.replace('status: 0', 'status: 1'), REAL_DIED])) == 1
+
+
+def test_swiping_the_game_away_is_not_a_bug():
+    assert _gone([REAL_SWIPE, REAL_REMOVE, REAL_DIED.replace('1795331784.514', '1795331676.1')]) == []
+
+
+def test_a_crash_is_not_also_a_closed_game():
+    assert _gone([REAL_DIED], crash_at=1795331760.0) == []
+
+
+def test_background_death_and_memory_for_launch_are_not_bugs():
+    assert _gone([REAL_MEMORY_FOR_LAUNCH, REAL_DIED.replace('fg  TOP ', 'cch  CEM ')]) == []
+
+
+REAL_HEALTH = """           TOTAL PSS:  1816042            TOTAL RSS:  1157449       TOTAL SWAP PSS:   749940
+Thermal Status: 2
+	Temperature{mValue=60.182, mType=0, mName=CPU, mStatus=0}
+	Temperature{mValue=58.4, mType=1, mName=GPU, mStatus=0}
+  level: 76
+  temperature: 301
+"""
+
+
+def test_phone_health_from_real_output():
+    from lens import health
+    h = health.parse(REAL_HEALTH)
+    assert h == {'mem_mb': 1773, 'throttle': 2, 'cpu_c': 60, 'gpu_c': 58, 'battery_pct': 76, 'battery_c': 30}
+    readings = [(0.0, {**h, 'mem_mb': 1400}), (300.0, {**h, 'mem_mb': 1600}), (600.0, h)]
+    now = health.at(readings, 605.0)
+    assert now['mem_change_10min'] == 373
+    assert health.line(now) == 'memory 1.7 GB (+373 MB in 10 min) · CPU 60 °C · throttling: moderate · battery 30 °C, 76%'
+    assert health.parse('') == {} and health.at([], 5.0) is None and health.line(None) == ''
+
+
+def test_bug_keeps_its_health_reading_when_a_note_arrives(tmp_path):
+    meta = {'model': 'X', 'android': '16', 'package': PKG, 'game_version': '1', 'serial': 'X'}
+    from lens import health
+    ev = Event('manual', 1763561000.0)
+    folder = bugs.write(tmp_path, ev, {**meta, 'health': health.parse(REAL_HEALTH)}, [], [], lambda out: False)
+    assert '| Phone | memory 1.7 GB' in (folder / 'report.md').read_text()
+    ev.note = 'kicker fell short'
+    bugs.update(folder, ev, meta, [], False)              # the note arrives later, with the plain session meta
+    assert json.loads((folder / 'meta.json').read_text())['health']['mem_mb'] == 1773
+    assert '| Phone | memory 1.7 GB' in (folder / 'report.md').read_text()
+
+
+def test_regression_checks(tmp_path):
+    from lens import checks
+    data = checks.load(tmp_path)
+    a = checks.add(data, '  Open the controls editor:   no lag ')
+    b = checks.add(data, 'Kick a 40-yard field goal')
+    assert a['text'] == 'Open the controls editor: no lag' and b['id'] == 2
+    assert checks.add(data, 'Kick a 40-yard field goal') is None and checks.add(data, '   ') is None
+    checks.result(data, '12.8.21X', 1, 'pass')
+    checks.result(data, '12.8.22X', 1, 'fail')
+    checks.result(data, '12.8.22X', 2, 'pass')
+    checks.result(data, '12.8.22X', 2, None)              # changed my mind: not checked
+    assert checks.report(data, '12.8.22X') == 'Build 12.8.22X: 0 passed, 1 failed, 1 not checked\n❌ Open the controls editor: no lag'
+    checks.save(tmp_path, data)
+    again = checks.load(tmp_path)
+    assert again['runs']['12.8.21X'] == {'1': 'pass'} and again['last_build'] == '12.8.22X'
+    checks.remove(again, 1)
+    assert [c['id'] for c in again['checks']] == [2]

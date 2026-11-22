@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 SEG_SECONDS = 2
+STALL = 8   # seconds with no video frame before the stream counts as dead and is restarted
 
 
 def created(st):
@@ -21,6 +22,12 @@ class Recorder(threading.Thread):
         self.stopped = threading.Event()
         self.procs = []
         self.connected = True
+        self.last_frame = time.time()   # when ffmpeg last decoded a frame (needs on_frame)
+
+    @property
+    def video_ok(self):
+        """Frames are arriving. False when the stream silently died (adb wedged) or the screen sat still."""
+        return time.time() - self.last_frame < STALL
 
     def ready(self, adb):
         """The phone is connected and has allowed USB debugging (not 'unauthorized' or 'authorizing')."""
@@ -47,10 +54,11 @@ class Recorder(threading.Thread):
                 self.connected = True
                 waiting = False
             began = time.monotonic()
-            # screenrecord stops itself after 3 minutes, so restart it every 170 s
+            # screenrecord stops itself after 3 minutes, so restart it every 170 s. 20 Mbps: at 6 the phone's encoder
+            # left smudges of the play-calling screen on the field for seconds after the snap.
             sr = subprocess.Popen([*adb, 'exec-out', 'screenrecord', '--output-format=h264',
-                                   '--time-limit', '170', '--bit-rate', '6000000', '-'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-            ff = subprocess.Popen(['ffmpeg', '-nostdin', '-loglevel', 'error', '-use_wallclock_as_timestamps', '1', '-f', 'h264', '-i', 'pipe:0',
+                                   '--time-limit', '170', '--bit-rate', '20000000', '-'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            ff = subprocess.Popen(['ffmpeg', '-nostdin', '-y', '-loglevel', 'error', '-use_wallclock_as_timestamps', '1', '-f', 'h264', '-i', 'pipe:0',
                                    '-an', '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p',
                                    '-force_key_frames', 'expr:gte(t,n_forced*1)',
                                    '-f', 'segment', '-segment_time', str(SEG_SECONDS), '-reset_timestamps', '1',
@@ -62,11 +70,22 @@ class Recorder(threading.Thread):
                 threading.Thread(target=self.frames, args=(ff.stdout,), daemon=True).start()
             sr.stdout.close()
             self.procs = [sr, ff]
-            code = ff.wait()
+            self.last_frame = time.time()   # a fresh start gets the full STALL window
+            stalled = False
+            while True:
+                try:
+                    code = ff.wait(timeout=1)
+                    break
+                except subprocess.TimeoutExpired:
+                    # A stream can die without either process exiting (seen when adb wedged): restart it.
+                    if self.on_frame and not self.stopped.is_set() and not self.video_ok:
+                        stalled = True
+                        ff.terminate()
+            sr.terminate()   # else a stuck screenrecord stays open on the phone after every failed start
             # The stream breaks when the screen rotates (a landscape game opening) or the cable drops.
             # ffmpeg's own errors are a wall of red text, so say it once, plainly, and carry on.
             quick = time.monotonic() - began < 3
-            if code != 0 and not self.stopped.is_set():
+            if code != 0 and not self.stopped.is_set() and not stalled:   # a stall is reported by Lens itself
                 if not quick:
                     print('Recording restarted (screen rotated or the stream was interrupted).', flush=True)
                 elif not paused:   # fails at once, again and again: say it once
@@ -83,7 +102,8 @@ class Recorder(threading.Thread):
         size = 160 * 90
         while chunk := pipe.read(size):
             if len(chunk) == size:
-                self.on_frame(time.time(), chunk)
+                self.last_frame = time.time()
+                self.on_frame(self.last_frame, chunk)
 
     def segments(self):
         """[(path, start, end)] in host time."""
@@ -114,9 +134,15 @@ def last_frame(segments, out):
     if not done:
         return None
     path, _, end = done[-1]
-    ok = subprocess.run(['ffmpeg', '-nostdin', '-loglevel', 'fatal', '-y', '-sseof', '-0.3', '-i', path,
-                         '-frames:v', '1', str(out)], stdin=subprocess.DEVNULL).returncode == 0
-    return end if ok else None
+    # -sseof -1: a keyframe lands every second, so this always finds one (-0.3 found none on ffmpeg 9).
+    # -strict unofficial: ffmpeg 9 won't write a JPEG from the recording's TV-range colour without it.
+    subprocess.run(['ffmpeg', '-nostdin', '-loglevel', 'fatal', '-y', '-sseof', '-1', '-i', path,
+                    '-frames:v', '1', '-strict', 'unofficial', str(out)], stdin=subprocess.DEVNULL)
+    # ffmpeg can exit 0 without writing anything, so check the file instead
+    try:
+        return end if Path(out).stat().st_mtime >= end else None
+    except OSError:
+        return None
 
 
 def cut(segments, t0, t1, out, fps=None):
@@ -155,4 +181,5 @@ def cut(segments, t0, t1, out, fps=None):
         cmd += ['-c', 'copy']
     done = subprocess.run([*cmd, '-movflags', '+faststart', str(out)], stdin=subprocess.DEVNULL)
     shutil.rmtree(snap, ignore_errors=True)
-    return done.returncode == 0
+    # ffmpeg can exit 0 without writing anything (no frames in the segments), so check the file itself
+    return done.returncode == 0 and Path(out).exists() and Path(out).stat().st_size > 0

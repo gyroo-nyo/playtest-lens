@@ -2,7 +2,7 @@
 import re
 from dataclasses import dataclass, field
 
-CRASH_TAGS = {'AndroidRuntime', 'DEBUG', 'CRASH', 'libc'}
+CRASH_TAGS = {'DEBUG'}   # crash_dump writes a native crash's tombstone under its own pid; other apps' libc/AndroidRuntime lines are noise
 LINE = re.compile(r'^\s*(\d+\.\d+)\s+(\d+)\s+(\d+)\s+([VDIWEFA])\s+(.*?)\s*: (.*)$')
 
 

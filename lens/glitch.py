@@ -9,8 +9,10 @@ import subprocess
 
 from .logcat import Event
 
-W, H = 64, 36
-MAGENTA = 0.04     # share of the screen that must be magenta (4%: a missing texture is big and solid)
+# 256 x 144 (shrunk by area, so a small patch keeps its colour): at 64 x 36 one player's missing texture blurred away.
+W, H = 256, 144
+# 0.05% of the screen (a ball-sized patch reads 0.09% after video encoding; a 6 px speck reads 0). 1,378 real GFL frames, one a second from 39 clips: not one magenta pixel.
+MAGENTA = 0.0005
 
 
 def is_magenta(r, g, b):
@@ -26,7 +28,7 @@ def magenta_share(rgb):
 
 def small_rgb(image):
     """The image shrunk to W x H, as raw RGB24 bytes."""
-    out = subprocess.run(['ffmpeg', '-nostdin', '-loglevel', 'fatal', '-i', str(image), '-vf', f'scale={W}:{H}',
+    out = subprocess.run(['ffmpeg', '-nostdin', '-loglevel', 'fatal', '-i', str(image), '-vf', f'scale={W}:{H}:flags=area',
                           '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], stdin=subprocess.DEVNULL, capture_output=True)
     return out.stdout if len(out.stdout) == W * H * 3 else b''
 

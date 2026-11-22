@@ -18,42 +18,42 @@ colors:
   advisory: "#1F5F8B"
 typography:
   readout:
-    fontFamily: "Silkscreen, Courier New, monospace"
+    fontFamily: "Rajdhani, Arial Narrow, sans-serif"
     fontSize: "52px"
     fontWeight: 700
     lineHeight: 0.9
     letterSpacing: "-0.04em"
   headline:
-    fontFamily: "Silkscreen, Courier New, monospace"
+    fontFamily: "Rajdhani, Arial Narrow, sans-serif"
     fontSize: "24px"
     fontWeight: 700
     lineHeight: 1.12
     letterSpacing: "-0.03em"
   band-head:
-    fontFamily: "Silkscreen, Courier New, monospace"
+    fontFamily: "Rajdhani, Arial Narrow, sans-serif"
     fontSize: "22px"
     fontWeight: 700
     lineHeight: 1
     letterSpacing: "-0.01em"
   body:
-    fontFamily: "Work Sans, system-ui, sans-serif"
+    fontFamily: "Saira, system-ui, sans-serif"
     fontSize: "14px"
     fontWeight: 400
     lineHeight: 1.5
   label:
-    fontFamily: "Work Sans, system-ui, sans-serif"
+    fontFamily: "Saira, system-ui, sans-serif"
     fontSize: "11px"
     fontWeight: 600
     lineHeight: 1.3
     letterSpacing: "0.1em"
   button:
-    fontFamily: "Work Sans, system-ui, sans-serif"
+    fontFamily: "Saira, system-ui, sans-serif"
     fontSize: "12px"
     fontWeight: 700
     lineHeight: 1.2
     letterSpacing: "0.06em"
   data:
-    fontFamily: "JetBrains Mono, ui-monospace, Menlo, monospace"
+    fontFamily: "IBM Plex Mono, ui-monospace, Menlo, monospace"
     fontSize: "13px"
     fontWeight: 400
     lineHeight: 1.5
@@ -149,14 +149,14 @@ components:
 
 **Creative North Star: "The Bitmap Specimen"**
 
-The dashboard reads like an Emigre bitmap type specimen printed on newsprint. The few things a tester glances at from beside the phone (recording time, FPS, bug counts, the selected bug's title) are set in big pixel numerals and caps. Everything read up close (lists, facts, logs, help text) is plain, crisp sans and mono. Regions are cut apart by thick ink rules, not cards or shadows.
+The dashboard reads like a game's settings menu printed on newsprint ("Console"). The few things a tester glances at from beside the phone (session time, FPS, bug counts, the selected bug's title) are set in big Rajdhani numerals and caps. Everything read up close (lists, facts, logs, help text) is plain, crisp sans and mono. Regions are cut apart by thick ink rules, not cards or shadows.
 
-It stays calm beside the game: one blue accent, colour kept for meaning (crash, jank), and no decoration that moves. Density is a working tool's: one-size feed rows, tight facts, no hero space. Fonts ship with the app in `lens/web/fonts` (Silkscreen 400/700, Work Sans variable, JetBrains Mono variable), served by `lens/ui.py` at `/fonts/`; the page makes no external font calls and works offline.
+It stays calm beside the game: one blue accent, colour kept for meaning (crash, jank), and no decoration that moves. Density is a working tool's: one-size feed rows, tight facts, no hero space. Fonts ship with the app in `lens/web/fonts` (Rajdhani 500/600/700, Saira variable, IBM Plex Mono 400/500/600), served by `lens/ui.py` at `/fonts/`; the page makes no external font calls and works offline.
 
 **Key Characteristics:**
 - Neutral newsprint paper, ink text, 3px ink rules between regions.
-- Black bands with paper-coloured pixel caps: the top bar, the bug list head, dialog heads.
-- Pixel face only for glance-at numbers and heads, 22px and up.
+- Black bands top and bottom: the top bar with the Mark button, the status bar, dialog heads.
+- Rajdhani only for glance-at numbers and heads, 22px and up.
 - Square corners everywhere.
 - One ultramarine accent for selection and the primary action.
 - Buttons squish on press and spring back.
@@ -191,17 +191,17 @@ Black ink on a neutral grey-white paper, one synthetic ultramarine, and signal c
 
 ## Typography
 
-**Display Font:** Silkscreen (with Courier New, monospace)
-**Body Font:** Work Sans (with system-ui)
-**Data Font:** JetBrains Mono (with ui-monospace, Menlo)
+**Display Font:** Rajdhani (with Arial Narrow)
+**Body Font:** Saira (with system-ui)
+**Data Font:** IBM Plex Mono (with ui-monospace, Menlo)
 
 **Character:** A blocky bitmap face for what you read from across the desk, a quiet grotesque for what you read up close, and a mono for anything that is a time, a number, a file or a log.
 
 ### Hierarchy
-- **Readout** (Silkscreen 700, 52px, line-height 0.9): recording clock and FPS. Bug counts use 40px. At phone width 36px and 30px.
-- **Headline** (Silkscreen 700, 24px, uppercase, clamped to 4 lines): the selected bug's title.
-- **Band head** (Silkscreen 700, 22px): the bug list head and dialog heads, paper on ink.
-- **Logo** (Silkscreen 700, 24px): PLAYTEST LENS in the top band.
+- **Readout** (Rajdhani 700, 50px, line-height 0.85): session clock and FPS in the left rail. The tally uses 32px.
+- **Headline** (Rajdhani 700, 36px, clamped to 3 lines): the selected bug's title.
+- **Band head** (Rajdhani 700, 22px, tracked caps): the bug list head and dialog heads, paper on ink.
+- **Logo** (Rajdhani 700, 24px, tracked .1em): PLAYTEST LENS beside a square lens mark in the top band.
 - **Section head** (Work Sans 700, 13px, uppercase, 0.12em): plain section strips.
 - **Body** (Work Sans 400, 14px, 1.5): feed titles, dialog text, help.
 - **Button** (Work Sans 700, 12px, uppercase, 0.06em).
@@ -209,7 +209,7 @@ Black ink on a neutral grey-white paper, one synthetic ultramarine, and signal c
 - **Data** (JetBrains Mono 400, 12 to 13px): times, clip lengths, facts, log, report editor, status bar. Numbers are tabular site-wide.
 
 ### Named Rules
-**The 22px Floor Rule.** Silkscreen is used at 22px and up. The only exception is the logo at phone width (12px). Anything smaller is Work Sans or JetBrains Mono.
+**The 22px Floor Rule.** Rajdhani is used at 22px and up. Anything smaller is Saira or IBM Plex Mono. Tracked uppercase labels (Saira 600, 10–11px) are the only text under 12px.
 
 **The One Row Size Rule.** Feed rows are one type size (14px); rank comes from weight and the kind chip, not size.
 
@@ -225,7 +225,7 @@ A full-height grid: 60px top band, content, 30px status bar. The content splits 
 - Under 640px: logo 12px on two lines, REC and key hints hide, feed rows drop the kind chip, the bug counts and the shortcut list hide. Tabs keep short words.
 
 ### Named Rules
-**The Three Pixel Rule.** Regions are divided by 3px ink rules, blocks inside a column by 2px ink rules, rows by 1px hairlines. Nothing else separates content.
+**The Rule Rule.** Regions are divided by 2px ink rules, blocks inside a column by 1px ink or grey rules, rows by 1px hairlines. Nothing else separates content.
 
 ## Elevation & Depth
 
@@ -264,19 +264,19 @@ Work Sans 700 11px caps with a 2px border in the text colour. Colour by kind: re
 Field white, 2px ink border, square, 9px 10px padding. Focus is a 3px ultramarine outline, 2px offset (site-wide `:focus-visible`). Waiting for a comment: ultramarine border, wash ring, hint text turns ultramarine.
 
 ### Black bands
-The top band (60px), the bug list head (48px) and dialog heads (52px) are ink with paper-coloured Silkscreen caps. REC is a steady square light, grey when off and paper when recording; it does not blink.
+The top band (64px), the status bar (32px) and dialog heads (56px) are ink. REC is a square light: red and slowly blinking while video arrives, amber with NO VIDEO or NO PHONE when it doesn't, grey when idle.
 
 ### Phone frame and scrubber
 The phone sits in an ink frame with corner brackets; on Mark the brackets snap in and a paper shutter flashes once (380ms). The scrubber under a clip is an 18px paper-2 track with an ink playhead, grey tap ticks and an ultramarine bug tick.
 
 ### Frame-rate bars
-"Frame rate, last minute": 40 bars, one per 1.5 s poll, in a 72px strip on a 2px ink baseline. Each bar is built from 4px blocks with 2px gaps, so it reads as pixels. Height maps 0 to 60 fps; a dashed hairline marks 30 fps. Bars are ink, amber under 30 fps, red under 20. When nothing is recording the bars hide and a one-line grey mono note shows instead.
+"Frame rate · 60 s": 40 bars, one per 1.5 s poll, in a 112px boxed chart with a dashed 60 line and a red 30 line, both labelled. Bars are ink, red for a drop under 30, grey for GFL's deliberate 15 fps play-calling screen. A count ("2 drops" or "steady") sits above. When nothing is recording a one-line grey mono note shows instead.
 
 ### Shortcut list
 A two-column list under a 2px ink rule: the key in JetBrains Mono 700 12px, what it does in grey Work Sans 13px (Enter, J / K, 1 2 3, D C, X).
 
 ### Dialogs and toasts
-Dialogs: paper, 3px ink border, black pixel-caps head, 3px ink rule over the footer, spring in (260ms). Toasts: ink with paper text bottom right, spring up (340ms); errors are red with white text, prefixed "Error".
+Dialogs: paper, 2px ink border with a hard 8px ink offset shadow, black Rajdhani head, 1px ink rule over the footer, spring in (260ms). Toasts: ink with paper text bottom right, spring up (340ms); errors are red with white text, prefixed "Error".
 
 ### Motion
 Motion is feedback only: press-and-spring, mark punch, corner snap, row arrival, view enter (220ms fade-up), dialog and toast entry. Reduced Motion removes all animation and transforms, keeping only 120ms colour fades.
@@ -284,8 +284,8 @@ Motion is feedback only: press-and-spring, mark punch, corner snap, row arrival,
 ## Do's and Don'ts
 
 ### Do:
-- **Do** set glance-at numbers and band heads in Silkscreen at 22px or more, and everything read up close in Work Sans or JetBrains Mono.
-- **Do** separate regions with 3px ink rules and put list and dialog heads in black pixel-caps bands.
+- **Do** set glance-at numbers and heads in Rajdhani at 22px or more, and everything read up close in Saira or IBM Plex Mono.
+- **Do** separate regions with ink rules, and show every shortcut as a keycap next to its action.
 - **Do** keep ultramarine (#3340FF) for selection, focus and the single primary action.
 - **Do** give every control the press-and-spring, and respect Reduce Motion.
 - **Do** self-host every font in `lens/web/fonts`.

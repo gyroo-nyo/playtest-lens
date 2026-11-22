@@ -22,20 +22,23 @@ SAMPLE = 4         # frames a second read for labels
 
 def actions(touches, t0, t1=None):
     """[(start, seconds held, x, y, distance moved)] for each finger-down inside [t0, t1], in screen 0..1."""
-    out, cur = [], None
+    out, cur = [], {}      # finger -> [start, x, y, moved]; old touch logs have no finger: one finger
     for ts, t in touches:
         if t1 is not None and ts > t1:
             break
+        f = t.get('finger', 0)
         if t['type'] == 'down':
-            if cur and cur[0] >= t0:            # a down without an up (second finger): close the last one
-                out.append((cur[0], ts - cur[0], cur[1], cur[2], cur[3]))
-            cur = [ts, t['x'], t['y'], 0.0, t['x'], t['y']]
-        elif cur and t['type'] == 'move':
-            cur[3] = max(cur[3], ((t['x'] - cur[1]) ** 2 + (t['y'] - cur[2]) ** 2) ** 0.5)
-        elif cur and t['type'] == 'up':
-            if cur[0] >= t0:
-                out.append((cur[0], ts - cur[0], cur[1], cur[2], cur[3]))
-            cur = None
+            if f in cur and cur[f][0] >= t0:      # a down without an up: close the last one
+                out.append((cur[f][0], ts - cur[f][0], cur[f][1], cur[f][2], cur[f][3]))
+            cur[f] = [ts, t['x'], t['y'], 0.0]
+        elif f in cur and t['type'] == 'move':
+            c = cur[f]
+            c[3] = max(c[3], ((t['x'] - c[1]) ** 2 + (t['y'] - c[2]) ** 2) ** 0.5)
+        elif f in cur and t['type'] == 'up':
+            c = cur.pop(f)
+            if c[0] >= t0:
+                out.append((c[0], ts - c[0], c[1], c[2], c[3]))
+    out.sort()
     return out
 
 
@@ -111,7 +114,27 @@ def situation(lines):
     def game_text(t):     # scoreboard words and scores; not the phone's status bar ("* Ш kB/s", "08:57 0 0 9")
         return re.fullmatch(r"[A-Za-z0-9 :.&'!%-]+", t) and (re.search(r'[A-Za-z]', t) or re.fullmatch(r'\d{1,3}', t))
     top = sorted((l for l in lines if l[2] + l[4] / 2 < TOP), key=lambda l: l[1])
-    return ' · '.join(l[0].strip() for l in top if game_text(l[0].strip()))
+    return ' · '.join(t for l in top if not in_meter(l) and (t := no_meter(l[0])) and game_text(t))
+
+
+# Lens's FPS meter: 195 x 55 px at (24, 24) in clips about 2400 x 1080 (meter.py, video.py). Text read wholly
+# inside it is the meter however OCR spells it ('f60 FPSS', '160 FFS'); text running on past it is the scoreboard.
+METER_BOX = (0.1, 0.085)
+
+
+def in_meter(line):
+    _, x, y, w, h = line
+    return x + w < METER_BOX[0] and y + h < METER_BOX[1]
+
+
+METER = re.compile(r'^\W*[a-z]?(\d{1,3}|--)\s*F[PF]?[S5]*', re.I)
+
+
+def no_meter(text):
+    """The text without Lens's FPS meter run into it ('59 FPSOWN AND 10' -> 'OWN AND 10'); '' if only a scrap is left."""
+    text = text.strip()
+    rest = METER.sub('', text).strip()
+    return text if rest == text else rest if len(rest) >= 4 else ''
 
 
 def describe(clip, touches, t0, moment):

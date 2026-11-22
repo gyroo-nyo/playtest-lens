@@ -7,8 +7,9 @@ from pathlib import Path
 from .logcat import headline
 
 KIND_LABEL = {'crash': 'Crash', 'anr': 'App not responding', 'manual': 'Bug',
-              'freeze': 'Freeze', 'lag': 'Frame drops', 'text': 'Text bug', 'glitch': 'Visual glitch'}
-SEEN = ('freeze', 'lag', 'text', 'glitch')   # caught from the screen and taps, not the log
+              'freeze': 'Freeze', 'lag': 'Frame drops', 'text': 'Text bug', 'glitch': 'Visual glitch',
+              'closed': 'Game closed'}
+SEEN = ('freeze', 'lag', 'text', 'glitch', 'closed')   # Lens's own one-line description is the title
 
 
 def title(ev):
@@ -45,6 +46,8 @@ def report(ev, meta, touches, folder=None, t0=None, clip_seconds=None, desc=None
     else:
         steps = 'No taps recorded: watch clip.mp4.'
     situation = f"| On screen | {desc['situation']} |\n" if desc and desc.get('situation') else ''
+    from .health import line as health_line
+    phone = f"| Phone | {health_line(meta['health'])} |\n" if meta.get('health') else ''
     moment = '\n![the moment of the bug](moment.jpg)\n' if folder and (folder / 'moment.jpg').exists() else ''
     if ev.kind == 'manual':
         actual = ev.note or '_Describe what went wrong (see clip.mp4)._'
@@ -53,7 +56,8 @@ def report(ev, meta, touches, folder=None, t0=None, clip_seconds=None, desc=None
         actual = (ev.lines[0] if ev.lines else KIND_LABEL[ev.kind]) + (f'. Tester: {ev.note}' if ev.note else '')
         expected = {'lag': 'The game stays smooth (45-60 fps).',
                     'text': 'Every label shows real text, not a key or a placeholder.',
-                    'glitch': 'Every model and surface has its texture.'}.get(ev.kind, 'The game reacts to every tap.')
+                    'glitch': 'Every model and surface has its texture.',
+                    'closed': 'The game keeps running.'}.get(ev.kind, 'The game reacts to every tap.')
     else:
         actual = ev.note or (f'The game {"crashed" if ev.kind == "crash" else "stopped responding"}: `{title(ev)}`')
         expected = 'The game keeps running normally.'
@@ -73,7 +77,7 @@ def report(ev, meta, touches, folder=None, t0=None, clip_seconds=None, desc=None
 | When | {stamp(ev.ts)} |
 | Device | {meta['model']} (Android {meta['android']}) |
 | Game | {meta['package']} {meta['game_version']} |
-{situation}
+{phone}{situation}
 ## What happened
 {actual}
 
@@ -110,6 +114,8 @@ def write(root, ev, meta, logs, touches, make_clip, t0=None, clip_seconds=None):
 def update(folder, ev, meta, touches, has_clip=True, t0=None, clip_seconds=None):
     """(Re)writes meta and report, e.g. when the tester's note arrives after the clip."""
     folder = Path(folder)
+    if not meta.get('health') and (folder / 'meta.json').exists():     # a later note or rebuild keeps the reading from the bug
+        meta = {**meta, 'health': json.loads((folder / 'meta.json').read_text(encoding='utf-8')).get('health')}
     (folder / 'meta.json').write_text(json.dumps({**meta, 'kind': ev.kind, 'time': stamp(ev.ts), 'title': title(ev),
                                                   'note': ev.note, 'matched_lines': ev.lines, 'clip': has_clip,
                                                   'clip_start': t0, 'clip_seconds': clip_seconds}, indent=2), encoding='utf-8')
@@ -130,7 +136,7 @@ def load(folder):
     ev = Event(m['kind'], ts, lines=m.get('matched_lines') or [], note=m.get('note') or '')
     touches_file = folder / 'touches.jsonl'
     touches = [(t['host_ts'], t) for t in map(json.loads, touches_file.read_text(encoding='utf-8').splitlines())] if touches_file.exists() else []
-    meta = {k: m[k] for k in ('model', 'android', 'package', 'game_version', 'serial') if k in m}
+    meta = {k: m[k] for k in ('model', 'android', 'package', 'game_version', 'serial', 'pids', 'health') if k in m}
     return ev, meta, touches, m
 
 
@@ -171,6 +177,48 @@ def listing(root):
         found = [row(f) for f in where.iterdir() if f.is_dir() and not f.name.startswith(('_', '.'))] if where.exists() else []
         return sorted((r for r in found if r), key=lambda r: r['id'], reverse=True)
     return {'bugs': rows(root), 'false_alarms': rows(root / FALSE)}
+
+
+def older(root, when, now=None):
+    """Bug and false-alarm folders saved before `when`: 'today' (before today), 'week' (over 7 days old) or 'all'.
+    Never one saved in the last minute: it may still be being written."""
+    import time as _time
+    now = now or _time.time()
+    cutoff = {'today': _time.mktime(_time.localtime(now)[:3] + (0, 0, 0, 0, 0, -1)), 'week': now - 7 * 86400, 'all': now - 60}[when]
+    root = Path(root)
+    out = []
+    for where in (root, root / FALSE):
+        for f in (where.iterdir() if where.exists() else []):
+            if not f.is_dir() or f.name.startswith(('_', '.')) or not (f / 'meta.json').exists():
+                continue
+            try:
+                saved = _time.mktime(_time.strptime(f.name[:15], '%Y%m%d-%H%M%S'))
+            except ValueError:
+                continue
+            if saved < min(cutoff, now - 60):
+                out.append(f)
+    return out
+
+
+def trash(folders):
+    """Moves folders to the Trash (macOS) or Recycle Bin (Windows), so a wrong delete can be undone.
+    Returns the ones that are gone."""
+    import shutil, subprocess, sys
+    paths = [str(Path(f).resolve()) for f in folders]
+    if not paths:
+        return []
+    if sys.platform == 'darwin':
+        js = ("ObjC.import('Foundation'); function run(a) { const fm = $.NSFileManager.defaultManager;"
+              " a.forEach(p => fm.trashItemAtURLResultingItemURLError($.NSURL.fileURLWithPath(p), null, null)); }")
+        subprocess.run(['osascript', '-l', 'JavaScript', '-e', js, *paths], stdin=subprocess.DEVNULL, capture_output=True)
+    elif sys.platform == 'win32':
+        ps = ("Add-Type -AssemblyName Microsoft.VisualBasic; foreach ($p in $args) { "
+              "[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($p, 'OnlyErrorDialogs', 'SendToRecycleBin') }")
+        subprocess.run(['powershell', '-NoProfile', '-Command', ps, *paths], stdin=subprocess.DEVNULL, capture_output=True)
+    else:
+        for p in paths:
+            shutil.rmtree(p, ignore_errors=True)
+    return [p for p in paths if not Path(p).exists()]
 
 
 def find(root, bug_id):

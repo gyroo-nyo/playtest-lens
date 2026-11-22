@@ -72,9 +72,21 @@ Touches are recorded from `adb shell getevent` with timestamps and replayed with
 | 1 | Ring buffer + crash/ANR detection + clips + manual mark | a forced crash and an F8 press each save a clip with logs |
 | 2 | Freeze, frame-drop, glitch and text detectors | each detector passes its fixture tests |
 | 3 | Dashboard + AI-written reports + export | a bug goes from catch to a GitHub issue in under 30 s |
-| 4 | Touch recording + replay | a recorded bug reproduces on the device |
+| 4 | What testers need every build (kept small): game-closed detector, a health strip (memory, heat, battery), "seen again" with a repro rate, the situation + play called as report step 1, and a regression checklist per build (menu checks replayed through a virtual touchscreen) | a regression checklist runs on a new GFL build with a clip per check |
 | 5 | iOS (via a Mac, logs + video, no replay) and PC games (screen capture) | |
 | 6 | Demo video, README numbers, release | |
+
+## Phase 4 notes
+
+- **Why not full replay:** football plays aren't repeatable (the AI moves differently every play), so replaying taps
+  won't bring back gameplay bugs. Replay only for menu checks in the regression list, where taps always lead to the same screen.
+- **Replay works without root:** the real touchscreen can't be written (SELinux), but Android's `uinput` tool can register a
+  virtual touchscreen (bus "virtual"; it's switched off while the display is off).
+- **Game closed (`lens/gone.py`):** the game died while on screen (`has died: fg TOP`) with no crash, no swipe-away, no
+  install and no clean `System.exit(0)` (GFL exits that way when you back out). Background deaths aren't reported: Android
+  ends background games all the time. (`rms_NormalReclaimer: doFastKill ... package: superfusion.gfl` looked like a kill
+  but is memory freed *for* GFL as it opens.)
+- **Keep it simple:** every addition has to earn its place on the page; no new settings.
 
 ## Phase 1 design (the useful core)
 

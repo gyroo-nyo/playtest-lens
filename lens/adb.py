@@ -6,7 +6,10 @@ import time
 
 def run(serial, *args, timeout=15):
     cmd = ['adb', *(['-s', serial] if serial else []), *args]
-    return subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=timeout).stdout
+    try:
+        return subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=timeout).stdout
+    except subprocess.TimeoutExpired:
+        return ''   # the phone stopped answering (cable, sleep): carry on as if it said nothing, never crash Lens
 
 
 def shell(serial, command):

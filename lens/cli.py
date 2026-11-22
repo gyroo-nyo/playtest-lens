@@ -9,7 +9,7 @@ import time
 import webbrowser
 from pathlib import Path
 
-from . import adb, bugs, freeze, glitch, lag, logcat, marks, text, ui, video
+from . import adb, alert, bugs, freeze, glitch, gone, health, lag, logcat, marks, text, ui, video
 from .logcat import Event
 from .ring import Ring, segments_for
 from .touches import Tracker
@@ -80,20 +80,47 @@ def cmd_watch(a):
     print(f'Watching {a.package} {meta["game_version"]} on {model}. Mark a bug: Enter (or {a.hotkey.upper()}), then type what went wrong whenever you\'re ready. Wrong catch? "x" + Enter. Ctrl+C to stop.')
 
     logs, touches, rates = Ring(60), Ring(60), Ring(60)
+    readings = Ring(11 * 60)        # phone health every 15 s: memory, heat, battery (health.py)
     live = ui.Live(a.package, meta['game_version'], model, None)   # what the dashboard shows; mark is set below
     pids = {'set': adb.pids(serial, a.package)}
+
+    def note_pids():
+        # every process id the game has had this session (it gets a new one after a crash): the Log tab's "Game only"
+        meta['pids'] = sorted(set(meta.get('pids', [])) | pids['set'])[-10:]
+    note_pids()
     detector = logcat.Detector(a.package)
+    closed = gone.Detector(a.package)
     seen = freeze.Detector()
     slow = lag.Detector()
 
+    looking = threading.Lock()      # frames (recorder thread) and ticks (below) both feed the freeze detector
+
     def on_frame(ts, data):
-        ev = seen.frame(ts, data)
+        with looking:
+            ev = seen.frame(ts, data)
         if ev:
             print(f'\n● {ev.kind.upper()} caught: {bugs.title(ev)}', flush=True)
             catch(ev)
 
+    def touched(ts, ev):
+        with looking:
+            seen.touch(ts, ev)
+
+    def still_screen():
+        # A frozen game sends no new video frames at all, so the freeze check can't wait for one.
+        while True:
+            time.sleep(freeze.TICK)
+            if not (rec.connected and rec.video_ok):
+                continue            # no phone or a dead stream: no picture to judge
+            with looking:
+                ev = seen.tick(time.time())
+            if ev:
+                print(f'\n● {ev.kind.upper()} caught: {bugs.title(ev)}', flush=True)
+                catch(ev)
+
     rec = video.Recorder(serial, tempfile.mkdtemp(prefix='lens-video-'), on_frame=on_frame)
     rec.start()
+    threading.Thread(target=still_screen, daemon=True).start()
     last_auto = {'folder': None}
 
     def capture(ev):
@@ -101,7 +128,8 @@ def cmd_watch(a):
         time.sleep(max(0.0, ev.ts + AFTER + video.SEG_SECONDS + 0.5 - time.time()))
         t0, t1 = ev.ts - BEFORE, ev.ts + AFTER
         tw = touches.window(t0, t1)
-        folder = bugs.write(a.out, ev, meta, logs.window(ev.ts - 60, t1), tw,
+        now = {**meta, 'health': health.at(readings.window(ev.ts - 11 * 60, ev.ts + 1), ev.ts)}
+        folder = bugs.write(a.out, ev, now, logs.window(ev.ts - 60, t1), tw,
                             lambda out: video.cut(segments_for(rec.segments(), t0, t1), t0, t1, out, rates.window(t0 - 5, t1)), t0, BEFORE + AFTER)
         if ev.kind != 'manual':
             last_auto['folder'] = folder
@@ -109,7 +137,12 @@ def cmd_watch(a):
             marked.saved(ev, folder, tw, t0)
             f0 = ev.ts - FULL
             video.cut(segments_for(rec.segments(), f0, t1), f0, t1, folder / 'full.mp4', rates.window(f0 - 5, t1))
-            bugs.update(folder, ev, meta, tw, True, t0, BEFORE + AFTER)   # lists full.mp4, and a comment typed meanwhile
+            has_clip = (folder / 'clip.mp4').exists()
+            bugs.update(folder, ev, now, tw, has_clip, t0, BEFORE + AFTER)   # lists full.mp4, and a comment typed meanwhile
+            if not has_clip:
+                print('\n● Saved WITHOUT a clip: no video was arriving from the phone. Check the cable.', flush=True)
+                if sounds_on():
+                    alert.ding('A mark was saved without a clip. Check the cable.')
         print(f'\n● {ev.kind.upper()} saved: {folder}', flush=True)
 
     def catch(ev):
@@ -122,16 +155,22 @@ def cmd_watch(a):
             return
         logs.add(e.ts + offset, e.raw)
         if e.tag == 'ActivityTaskManager' and (act := freeze.started(e.msg)):
-            seen.opened(act, a.package)
+            with looking:
+                seen.opened(act, a.package)
         frames = freeze.game_frames(e.msg, a.package)
         if frames:
-            seen.drawing(e.ts + offset, frames[0])
+            with looking:
+                seen.drawing(e.ts + offset, frames[0])
             rates.add(e.ts + offset, frames[0])
             live.fps, live.fps_ts = frames[0], time.time()
             if (dropped := slow.drawing(e.ts + offset, *frames)):
                 print(f'\n● LAG caught: {bugs.title(dropped)}', flush=True)
                 catch(dropped)
         ev = detector.feed(e, e.ts + offset, pids['set'])
+        if ev:
+            closed.crash(ev.ts)       # the process dying next is part of this crash
+        else:
+            ev = closed.feed(e, e.ts + offset, pids['set'])
         if ev:
             print(f'\n● {ev.kind.upper()} caught: {bugs.title(ev)}', flush=True)
             catch(ev)
@@ -161,17 +200,34 @@ def cmd_watch(a):
     if server:
         server.RequestHandlerClass.live = live      # the page switches from saved bugs to the live phone
 
+    lost = alert.Incident()
+    sounds_on = lambda: ui.settings(a.out).get('sounds', True)   # "sounds": false in bugs/.lens.json turns them off
+
     def show_live():
-        frame = Path(tempfile.mkdtemp(prefix='lens-live-')) / 'live.jpg'
+        # the page's connection status, and the lost-video sound
         while True:
-            time.sleep(1)
-            try:
-                live.connected = rec.connected
-                if (t := video.last_frame(rec.segments(), frame)) and t != live.frame_ts:
-                    live.frame, live.frame_ts = str(frame), t
-            except Exception:
-                pass
+            time.sleep(0.5)
+            live.connected, live.video = rec.connected, rec.video_ok
+            # One sound per outage: the phone dropped off adb, or the video died while the game is in front and
+            # drawing (a locked phone or a still home screen sends no frames either, and must not beep).
+            now = time.time()
+            game_drawing = not seen.away and bool(rates.window(now - 3, now))
+            if lost.update(not rec.connected or (not rec.video_ok and game_drawing)):
+                print(f'\n● No video from the phone for {video.STALL} s: marks won\'t have clips. Check the cable.', flush=True)
+                if sounds_on():
+                    alert.ding('No video from the phone: marks won\'t have clips. Check the cable.')
+            live.alarm = lost.open
     threading.Thread(target=show_live, daemon=True).start()
+
+    def check_health():
+        while True:
+            time.sleep(health.EVERY)
+            pid = max(pids['set'], default=None)
+            if pid and rec.connected:
+                if (h := health.parse(adb.shell(serial, health.command(pid)))):
+                    readings.add(time.time(), h)
+                    live.health = h
+    threading.Thread(target=check_health, daemon=True).start()
 
     # Android's "Show taps": white dots in the recording wherever a finger touches, so the clip
     # shows what was tapped. Put back as it was when Lens stops.
@@ -184,7 +240,7 @@ def cmd_watch(a):
         path, mx, my = ts
         tracker = Tracker(mx, my, adb.rotation(serial))
         procs.append(stream([*s, 'shell', 'getevent', '-lt', path],
-                            lambda t, line: (ev := tracker.feed(line)) and (touches.add(t, ev), seen.touch(t, ev))))
+                            lambda t, line: [(touches.add(t, ev), touched(t, ev)) for ev in tracker.feed(line)]))
     else:
         print('No touchscreen found: bugs will have no touch log.')
 
@@ -220,9 +276,9 @@ def cmd_watch(a):
         # Text bugs: read a full-size frame every few seconds (macOS Vision, ~0.3 s a frame).
         words, shot, last = text.Detector(), Path(tempfile.mkdtemp(prefix='lens-ocr-')) / 'frame.png', None
         looks = glitch.Detector()
-        if not text.ocr_binary():
+        reads = bool(text.ocr_binary())     # without it the glitch check still runs: it only needs ffmpeg
+        if not reads:
             print('Text-bug check off: needs swiftc on a Mac (Xcode command line tools) or Windows PowerShell.', flush=True)
-            return
         while True:
             time.sleep(3)
             try:
@@ -236,7 +292,7 @@ def cmd_watch(a):
                 if (ev := looks.check(ts, glitch.small_rgb(shot))):
                     print(f'\n● GLITCH caught: {bugs.title(ev)}', flush=True)
                     catch(ev)
-                if (ev := words.check(ts, text.read(shot))):
+                if reads and (ev := words.check(ts, text.read(shot))):
                     print(f'\n● TEXT caught: {bugs.title(ev)}', flush=True)
                     catch(ev)
             except Exception:
@@ -247,6 +303,7 @@ def cmd_watch(a):
         while True:
             time.sleep(2)
             pids['set'] = adb.pids(serial, a.package) or pids['set']   # keep the old pid while it is dying
+            note_pids()
             if ts:   # games turn the screen sideways after Lens starts: map taps with the current rotation
                 try:
                     r = adb.rotation(serial)
