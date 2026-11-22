@@ -1,0 +1,16 @@
+# working files and big masters: rebuild with `node export.mjs` + ffmpeg
+frames/
+frames-gif/
+shots*/
+s40a/
+s40b/
+node_modules
+audio.wav
+sheet*.png
+src-18s.html
+src-40s-v1.html
+lens-ident.mp4
+lens-ident.gif
+lens-ident-18s.*
+lens-ident-40s.mp4
+lens-ident-40s.gif

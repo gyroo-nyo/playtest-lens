@@ -326,7 +326,7 @@ def test_situation_is_the_scoreboard_not_the_status_bar():
     from lens import describe
     top = lambda t, x: (t, x, 0.01, 0.1, 0.03)
     assert describe.situation([top('DALLAS', 0.5), top('SECOND DOWN AND 11', 0.0), top('13', 0.6), top('1:45 Q2', 0.3),
-                               top('JUMP', 0.8)[:2] + (0.7, 0.05, 0.04)]) == 'SECOND DOWN AND 11 · 1:45 Q2 · DALLAS · 13'
+                               top('JUMP', 0.8)[:2] + (0.7, 0.05, 0.04)]) == '2nd & 11 · 1:45 Q2 · DALLAS 13'
     assert describe.situation([top('08:57 0 0 0 9', 0.0), top('* Ш kB/s', 0.4), top('vowiFi ıІ| → 79•4¾', 0.8)]) == ''
 
 
@@ -737,6 +737,10 @@ def test_regression_checks(tmp_path):
     assert a['text'] == 'Open the controls editor: no lag' and b['id'] == 2
     assert checks.add(data, 'Kick a 40-yard field goal') is None and checks.add(data, '   ') is None
     checks.result(data, '12.8.21X', 1, 'pass')
+    checks.result(data, '12.8.22X', 1, 'fail', '20261122-135412_manual')
+    assert data['bugs']['12.8.22X'] == {'1': '20261122-135412_manual'}
+    checks.result(data, '12.8.22X', 1, 'pass')             # changed to pass: the fail's clip link goes
+    assert data['bugs']['12.8.22X'] == {}
     checks.result(data, '12.8.22X', 1, 'fail')
     checks.result(data, '12.8.22X', 2, 'pass')
     checks.result(data, '12.8.22X', 2, None)              # changed my mind: not checked
@@ -746,3 +750,57 @@ def test_regression_checks(tmp_path):
     assert again['runs']['12.8.21X'] == {'1': 'pass'} and again['last_build'] == '12.8.22X'
     checks.remove(again, 1)
     assert [c['id'] for c in again['checks']] == [2]
+
+
+def test_circled_picture_goes_with_the_bug(tmp_path):
+    from lens import discord
+    meta = {'model': 'X', 'android': '16', 'package': PKG, 'game_version': '1', 'serial': 'X'}
+    folder = bugs.write(tmp_path, Event('manual', 1763561000.0, note='kicker stuck'), meta, [], [], lambda out: False)
+    (folder / 'moment.jpg').write_bytes(b'\xff\xd8\xffplain')
+    bugs.set_circled(tmp_path, folder.name, b'\xff\xd8\xffcircled', [{'x1': 1, 'y1': 2, 'x2': 30, 'y2': 40}])
+    assert json.loads((folder / 'circles.json').read_text())[0]['x2'] == 30      # Redraw can move them later
+    assert (folder / 'moment.jpg').read_bytes() == b'\xff\xd8\xffplain'         # the original stays
+    assert '](circled.jpg)' in (folder / 'report.md').read_text()
+    sent = []
+    discord.send('https://discord.com/api/webhooks/1/abc', folder, post=lambda u, b, k: sent.append(b) or (200, '{}'))
+    assert b'circled' in sent[0]
+    bugs.set_circled(tmp_path, folder.name, None)
+    assert not (folder / 'circles.json').exists() and not (folder / 'circled.jpg').exists() and '](moment.jpg)' in (folder / 'report.md').read_text()
+
+
+def test_seen_again(tmp_path):
+    meta = {'model': 'X', 'android': '16', 'package': PKG, 'serial': 'X'}
+    crash = lambda pid: [f'E AndroidRuntime: FATAL EXCEPTION: main', f'E AndroidRuntime: Process: {PKG}, PID: {pid}',
+                         'E AndroidRuntime: java.lang.NullPointerException: kicker at 0x7f3a21 line 88']
+    a = bugs.write(tmp_path, Event('crash', 1763561000.0, lines=crash(111)), {**meta, 'game_version': '12.8.21X'}, [], [], lambda out: False)
+    bugs.write(tmp_path, Event('manual', 1763561100.0, note='kicker stuck'), {**meta, 'game_version': '12.8.21X'}, [], [], lambda out: False)
+    b = bugs.write(tmp_path, Event('crash', 1763561200.0, lines=crash(222)), {**meta, 'game_version': '12.8.22X'}, [], [], lambda out: False)
+    assert 'Seen before' not in (a / 'report.md').read_text()
+    assert '| Seen before | 1 time, first' in (b / 'report.md').read_text() and 'builds 12.8.21X |' in (b / 'report.md').read_text()
+    rows = {r['kind']: r['seen'] for r in bugs.listing(tmp_path)['bugs']}
+    assert rows == {'crash': 2, 'manual': 1}
+
+
+def test_scoreboard_keeps_only_what_it_recognises():
+    from lens.describe import scoreboard, play_called
+    real = {   # raw OCR from real GFL clips -> what the report shows
+        '1E22': '', 'R': '', 'X XX': '', 'AII · Tools': '', 'ADAALER': '',
+        'FIROT DOWN AND 10 · 0:15 Q3 · CHICAGO · 21 · NEW ENGLAND · 14': '1st & 10 · 0:15 Q3 · CHICAGO 21 – NEW ENGLAND 14',
+        'ED DOWN AND C · 1:37 Q3 · CHICAGO · 21 · NEW ENGLAND 7': '1:37 Q3 · CHICAGO 21 – NEW ENGLAND 7',
+        'LLI · OWN AND 10 · 0:42 Q1 · LERR': '? & 10 · 0:42 Q1',
+        'SECOND DOWN AND 11 · 1:45 Q2 · DALLAS · 13': '2nd & 11 · 1:45 Q2 · DALLAS 13',
+    }
+    for raw, want in real.items():
+        assert scoreboard(raw) == want and scoreboard(want) == want, raw
+    assert play_called(['tapped the left', 'dragged BLITZ', 'JUMP', 'PRESSURE', 'DIVE']) == 'PRESSURE'
+    assert play_called(['JUMP', 'DIVE']) is None
+    assert play_called(['BLITZ', 'CHICAGO 2', 'THROW ×3'[:5]]) == 'CHICAGO 2'          # offense: team name + number
+    assert play_called(['NEW ENGLAND 1', 'tapped the left']) == 'NEW ENGLAND 1'
+    assert play_called(['THROW', 'I SWITCH']) is None
+
+
+def test_game_version_has_the_build_number():
+    from lens import adb
+    real = '    codePath=/data/app/x\n    versionCode=870 minSdk=26 targetSdk=36\n    versionName=12.8.22X.dev\n'
+    assert adb.game_version(real) == '12.8.22X.dev b870'
+    assert adb.game_version('    versionName=1.0\n') == '1.0' and adb.game_version('') == '?'

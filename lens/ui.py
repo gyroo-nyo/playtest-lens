@@ -5,6 +5,7 @@ nothing else on the network may reach it. Serves files only from inside the bugs
 HTTP Range so Safari can play and seek the clips, answers only requests addressed to 127.0.0.1 or
 localhost (no DNS rebinding), and only accepts actions sent with the page's own header.
 """
+import base64
 import json
 import mimetypes
 import re
@@ -20,7 +21,7 @@ from . import bugs, checks, discord
 
 PAGE = Path(__file__).parent / 'web' / 'index.html'
 FONTS = Path(__file__).parent / 'web' / 'fonts'
-FILES = {'clip.mp4', 'full.mp4', 'moment.jpg'}
+FILES = {'clip.mp4', 'full.mp4', 'moment.jpg', 'circled.jpg', 'circles.json'}
 PUBLIC = ('github_repo', 'package', 'discord_details')   # settings the page may see; the Discord webhook is a secret
 PORT = 8737
 CHECKS = threading.Lock()      # the page can send two clicks at once: one read-modify-write of .checks.json at a time
@@ -71,19 +72,19 @@ def reveal(path):
         subprocess.run(f'explorer /select,"{path}"', stdin=subprocess.DEVNULL)   # explorer wants the path glued to /select,
 
 
-def copy_file(path):
+def copy_file(*paths):
     """Put the file itself on the clipboard, so ⌘V / Ctrl+V in Discord attaches it. False if that didn't work."""
     if sys.platform == 'darwin':
         # AppleScript's `set the clipboard to POSIX file` left the clipboard empty about 1 time in 5 while saying it
         # worked, so write the file URL through NSPasteboard and read it back to be sure.
-        cmd = ['osascript', '-l', 'JavaScript', '-e', MAC_COPY, str(Path(path).resolve())]
+        cmd = ['osascript', '-l', 'JavaScript', '-e', MAC_COPY, *(str(Path(p).resolve()) for p in paths)]
         for _ in range(3):
             r = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding='utf-8')
             if r.stdout.strip() == 'ok':
                 return True
         return False
     elif sys.platform == 'win32':
-        cmd = ['powershell', '-NoProfile', '-Command', 'Set-Clipboard -LiteralPath $args[0]', str(Path(path).resolve())]
+        cmd = ['powershell', '-NoProfile', '-Command', 'Set-Clipboard -LiteralPath $args', *(str(Path(p).resolve()) for p in paths)]
     else:
         return False
     return subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True).returncode == 0
@@ -93,10 +94,10 @@ MAC_COPY = """ObjC.import('AppKit');
 function run(a) {
   const pb = $.NSPasteboard.generalPasteboard;
   pb.clearContents;
-  const url = $.NSURL.fileURLWithPath(a[0]);
-  const ok = pb.writeObjects($([url]));
-  const got = pb.stringForType('public.file-url');
-  return (ok && got.js === url.absoluteString.js) ? 'ok' : 'fail';
+  const urls = a.map(p => $.NSURL.fileURLWithPath(p));
+  const ok = pb.writeObjects($(urls));
+  const got = pb.stringForType('public.file-url');           // the first file; Finder and Discord read every item
+  return (ok && got.js === urls[0].absoluteString.js && Number(pb.pasteboardItems.count) === urls.length) ? 'ok' : 'fail';
 }"""
 
 
@@ -119,7 +120,7 @@ def issue_url(repo, report_md):
     lines = report_md.splitlines()
     title = re.sub(r'^#\s*', '', lines[0]) if lines else 'Bug'
     body = '\n'.join(l for l in lines[1:] if not l.startswith('![')).strip()
-    body += '\n\n_Attach clip.mp4 and moment.jpg from the bug folder._'
+    body += '\n\n_Attach clip.mp4 and the picture (circled.jpg if the problem is circled, else moment.jpg) from the bug folder._'
     q = urllib.parse.urlencode({'title': title, 'body': body[:6000]})
     return f'https://github.com/{repo}/issues/new?{q}'
 
@@ -238,6 +239,8 @@ class Handler(BaseHTTPRequestHandler):
             if not folder or name not in FILES or not (folder / name).exists():
                 return self.send(404, {'error': 'no such file'})
             return self.file(folder / name, mimetypes.guess_type(name)[0] or 'application/octet-stream')
+        if path in ('/logo.svg', '/favicon.ico'):        # the sword: the browser tab's icon
+            return self.file(PAGE.parent / 'logo.svg', 'image/svg+xml')
         if m := re.fullmatch(r'/fonts/([a-z0-9-]+\.woff2)', path):
             font = FONTS / m.group(1)
             return self.file(font, 'font/woff2') if font.exists() else self.send(404, {'error': 'no such font'})
@@ -250,6 +253,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get('X-Lens') != '1':
             return self.send(403, {'error': 'forbidden'})
         length = int(self.headers.get('Content-Length') or 0)
+        if length > 8 << 20:                      # the biggest real body is a circled picture, ~0.5 MB
+            return self.send(413, {'error': 'too big'})
         try:
             body = json.loads(self.rfile.read(length) or b'{}')
         except ValueError:
@@ -306,9 +311,8 @@ class Handler(BaseHTTPRequestHandler):
                             return self.send(400, {'error': 'Pass or fail?'})
                         if not build:
                             return self.send(409, {'error': 'Start Lens with the phone plugged in, so it knows which build this is.'})
-                        checks.result(data, build, cid, res)
-                        if res == 'fail' and self.live and self.live.mark:
-                            self.live.mark(f"Check failed: {check['text']}")
+                        ev = self.live.mark(f"Check failed: {check['text']}") if res == 'fail' and self.live and self.live.mark else None
+                        checks.result(data, build, cid, res, bugs.bug_id(ev) if ev else None)
                 checks.save(self.root, data)
                 return self.send(200, self.checks_state(data))
         if path == '/api/cleanup':
@@ -322,7 +326,7 @@ class Handler(BaseHTTPRequestHandler):
             n_false = sum(1 for f in found if f.parent.name == bugs.FALSE)
             return self.send(200, {'bugs': len(found) - n_false, 'false_alarms': n_false,
                                    'mb': round(sum(x.stat().st_size for f in found if f.exists() for x in f.iterdir() if x.is_file()) / 1048576)})
-        m = re.fullmatch(r'/api/bug/([^/]+)/(report|note|dismiss|restore|rebuild|ai|export|discord|discord-text|discord-clip)', path)
+        m = re.fullmatch(r'/api/bug/([^/]+)/(report|note|dismiss|restore|rebuild|ai|export|discord|discord-text|discord-clip|circled)', path)
         if not m:
             return self.send(404, {'error': 'not found'})
         bug_id, action = urllib.parse.unquote(m.group(1)), m.group(2)
@@ -338,6 +342,21 @@ class Handler(BaseHTTPRequestHandler):
             bugs.dismiss(self.root, bug_id)
         elif action == 'restore':
             bugs.restore(self.root, bug_id)
+        elif action == 'circled':
+            # {'jpeg': base64 JPEG} from the page's drawing, or {'jpeg': None} to remove the circles
+            jpeg = None
+            if body.get('jpeg'):
+                try:
+                    jpeg = base64.b64decode(str(body['jpeg']), validate=True)
+                except ValueError:
+                    return self.send(400, {'error': 'bad picture'})
+                if not jpeg.startswith(b'\xff\xd8\xff'):
+                    return self.send(400, {'error': 'bad picture'})
+            try:     # where the circles are, so Redraw can move them: [{x1, y1, x2, y2}] in picture pixels
+                circles = [{k: float(c[k]) for k in ('x1', 'y1', 'x2', 'y2')} for c in (body.get('circles') or [])[:50]] if jpeg else []
+            except (TypeError, KeyError, ValueError):
+                return self.send(400, {'error': 'bad circles'})
+            bugs.set_circled(self.root, bug_id, jpeg, circles)
         elif action == 'rebuild':
             bugs.rebuild(bugs.find(self.root, bug_id))
         elif action == 'ai':
@@ -356,15 +375,17 @@ class Handler(BaseHTTPRequestHandler):
             name = body.get('file', 'clip.mp4')
             if name not in ('clip.mp4', 'full.mp4'):
                 return self.send(400, {'error': 'Pick the 15 s clip or the 30 s before.'})
-            clip = discord.small_clip(bugs.find(self.root, bug_id), name)
+            folder = bugs.find(self.root, bug_id)
+            clip = discord.small_clip(folder, name)
             if not clip:
                 return self.send(404, {'error': 'This bug has no clip.'})
             if body.get('copy'):
-                if not copy_file(clip):
+                circled = folder / 'circled.jpg'           # the tester's circled picture goes along with the clip
+                if not copy_file(clip, *([circled] if circled.exists() else [])):
                     return self.send(500, {'error': 'Couldn\'t put the clip on the clipboard. Use Send to Discord, Copy text to find it in Finder.'})
             elif body.get('reveal', True):
                 reveal(clip)
-            return self.send(200, {'file': clip.name, 'mb': round(clip.stat().st_size / 1048576, 1)})
+            return self.send(200, {'file': clip.name, 'mb': round(clip.stat().st_size / 1048576, 1), 'picture': body.get('copy') and (folder / 'circled.jpg').exists()})
         elif action == 'discord':
             hook = settings(self.root).get('discord_webhook')
             if not hook:

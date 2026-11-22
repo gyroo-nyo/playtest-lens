@@ -107,7 +107,9 @@ def send(webhook, folder, post=None, details=False):
     folder = Path(folder)
     files, size = [], 0
     clip = small_clip(folder)
-    picture = folder / 'moment.jpg' if details or not clip else None     # short reports: the clip is enough
+    circled = folder / 'circled.jpg'
+    # short reports: the clip is enough, unless the tester circled the problem
+    picture = circled if circled.exists() else folder / 'moment.jpg' if details or not clip else None
     for path, mime in ((clip, 'video/mp4'), (picture, 'image/jpeg')):
         if path and path.exists() and size + path.stat().st_size <= LIMIT:
             data = path.read_bytes()

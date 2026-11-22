@@ -46,9 +46,15 @@ def clock_offset(serial):
 
 def info(serial, package):
     prop = lambda k: shell(serial, f'getprop {k}')
-    version = re.search(r'versionName=(\S+)', shell(serial, f'dumpsys package {package}'))
     return {'model': prop('ro.product.model'), 'android': prop('ro.build.version.release'),
-            'package': package, 'game_version': version.group(1) if version else '?', 'serial': serial}
+            'package': package, 'game_version': game_version(shell(serial, f'dumpsys package {package}')), 'serial': serial}
+
+
+def game_version(dumpsys_package):
+    """'12.8.22X.dev b870': the version name and the build number, as the game prints them (two builds can share a name)."""
+    name = re.search(r'versionName=(\S+)', dumpsys_package)
+    code = re.search(r'versionCode=(\d+)', dumpsys_package)
+    return f"{name.group(1)} b{code.group(1)}" if name and code else name.group(1) if name else '?'
 
 
 def parse_rotation(dumpsys_window):
@@ -67,6 +73,12 @@ def rotation(serial):
         m = re.search(r'SurfaceOrientation:\s*(\d)', shell(serial, 'dumpsys input'))
         r = int(m.group(1)) if m else 0
     return r
+
+
+
+def screen_off(serial):
+    """True when the phone's screen is off or dozing (no picture to record). False if it can't tell."""
+    return bool(re.search(r'mWakefulness=(Asleep|Dozing)', shell(serial, 'dumpsys power | grep mWakefulness=')))
 
 
 def find_touchscreen(getevent_pl):

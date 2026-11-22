@@ -201,7 +201,7 @@ Black ink on a neutral grey-white paper, one synthetic ultramarine, and signal c
 - **Readout** (Rajdhani 700, 50px, line-height 0.85): session clock and FPS in the left rail. The tally uses 32px.
 - **Headline** (Rajdhani 700, 36px, clamped to 3 lines): the selected bug's title.
 - **Band head** (Rajdhani 700, 22px, tracked caps): the bug list head and dialog heads, paper on ink.
-- **Logo** (Rajdhani 700, 24px, tracked .1em): PLAYTEST LENS beside a square lens mark in the top band.
+- **Logo** (Rajdhani 700, 24px, tracked .1em): PLAYTEST LENS beside the sword mark (`lens/web/logo.svg`, 24×24 pixel art: steel blade, gold crossguard, leather grip, an ultramarine lens in the pommel). On the ink band its outline lifts to #2A2A2E. The same file is the browser tab icon.
 - **Section head** (Work Sans 700, 13px, uppercase, 0.12em): plain section strips.
 - **Body** (Work Sans 400, 14px, 1.5): feed titles, dialog text, help.
 - **Button** (Work Sans 700, 12px, uppercase, 0.06em).

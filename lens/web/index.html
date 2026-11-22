@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Playtest Lens</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
 <style>
   /* fonts ship with Lens: the page works offline and never calls out */
   @font-face { font-family: 'Rajdhani'; src: url(/fonts/rajdhani-500.woff2) format('woff2'); font-weight: 500; font-display: swap; }
@@ -41,6 +42,7 @@
   .band { background: var(--ink); color: var(--paper); display: flex; align-items: center; gap: 28px; padding: 0 24px; min-width: 0; }
   .brand { display: flex; align-items: center; gap: 12px; white-space: nowrap; }
   .brand b { font: 700 24px/1 var(--head); letter-spacing: .1em; }
+  .brand .logo { flex: none; } .brand .logo .o { fill: #2a2a2e; }   /* the sword's black outline would vanish on the ink band */
   .feed-tabs { display: flex; gap: 2px; }
   .ftab { display: flex; align-items: center; gap: 8px; background: none; border: 0; color: var(--band-grey); padding: 9px 14px; font: 500 14px/1 var(--sans); white-space: nowrap;
           transition: color 120ms ease-out, background-color 120ms ease-out, transform 280ms var(--spring); }
@@ -132,6 +134,11 @@
   .cktable .now button { height: 32px; padding: 0 12px; border: 1.5px solid var(--ink); background: var(--paper); font: 600 12px/1 var(--sans); cursor: pointer; }
   .cktable .now button[aria-pressed="true"].pass { background: var(--normal); border-color: var(--normal); color: #fff; }
   .cktable .now button[aria-pressed="true"].fail { background: var(--error); border-color: var(--error); color: #fff; }
+  .cktable .ckclip { margin-left: 6px; height: 32px; padding: 0 10px; border: 1.5px solid var(--ink); background: var(--paper); font: 600 12px/1 var(--sans); cursor: pointer; }
+  .cktable td.old .ckclip { height: 26px; padding: 0 6px; }
+  .cktable .ckclip[aria-expanded="true"] { background: var(--ink); color: var(--paper); }
+  .cktable .ckvideo td { border-top: 0; padding-top: 0; }
+  .cktable .ckvideo video { display: block; width: 100%; max-height: 52vh; background: #000; margin-bottom: 8px; }
   .cktable .x { border: 0; background: none; color: var(--grey); cursor: pointer; font-size: 18px; padding: 4px 8px; }
   .cktable .x:hover { color: var(--error); }
   .work { display: grid; grid-template-rows: minmax(170px, 34%) minmax(0, 1fr); min-height: 0; min-width: 0; }
@@ -162,6 +169,7 @@
   .row .ctx { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .row.arrive { animation: arrive 520ms var(--out); }
   @keyframes arrive { 0% { opacity: 0; transform: translateX(-12px); background: var(--accent-tint); } 60% { opacity: 1; transform: none; } }
+  .times { font: 700 13px/1 var(--mono); color: var(--error); }
   .chip { justify-self: start; font: 700 11px/1 var(--sans); letter-spacing: .1em; padding: 4px 7px; border: 1px solid currentColor; white-space: nowrap; }
   .k-crash, .k-anr, .k-closed { color: var(--error); background: var(--error-bg); }
   .k-freeze, .k-lag { color: var(--caution); background: var(--caution-bg); }
@@ -299,6 +307,12 @@
   dialog[open]::backdrop { animation: fade-in 200ms ease-out; }
   @keyframes dlg-in { from { opacity: 0; transform: scale(.95) translateY(8px); } }
   @keyframes fade-in { from { opacity: 0; } }
+  dialog.wide { width: min(1100px, calc(100vw - 32px)); }
+  .drawbox { position: relative; line-height: 0; border: 1px solid var(--ink); }
+  .drawbox img { width: 100%; height: auto; display: block; user-select: none; }
+  .drawbox canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
+  .picrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .picrow img { height: 64px; border: 1px solid var(--ink); }
   dialog::backdrop { background: rgba(10, 10, 10, .5); }
   dialog header { display: flex; align-items: center; padding: 0 20px; height: 56px; background: var(--ink); color: var(--paper); }
   dialog header .label { flex: 1; font: 700 22px/1 var(--head); letter-spacing: .08em; color: var(--paper); }
@@ -363,7 +377,7 @@
 <body>
 <header class="band">
   <div class="brand">
-    <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><rect x="1.5" y="1.5" width="23" height="23" fill="none" stroke="currentColor" stroke-width="2"/><rect x="8" y="8" width="10" height="10" fill="#3340FF"/></svg>
+    <svg class="logo" width="32" height="32" aria-hidden="true" viewBox="0 0 24 24" shape-rendering="crispEdges"><rect x="21" y="1" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="19" y="2" width="2" height="1" fill="#0a0a0a" class="o"/><rect x="21" y="2" width="1" height="1" fill="#ffffff"/><rect x="22" y="2" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="18" y="3" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="19" y="3" width="1" height="1" fill="#ffffff"/><rect x="20" y="3" width="1" height="1" fill="#aab9c8"/><rect x="21" y="3" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="17" y="4" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="18" y="4" width="1" height="1" fill="#ffffff"/><rect x="19" y="4" width="1" height="1" fill="#aab9c8"/><rect x="20" y="4" width="1" height="1" fill="#5f7386"/><rect x="21" y="4" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="16" y="5" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="17" y="5" width="1" height="1" fill="#e8eef4"/><rect x="18" y="5" width="1" height="1" fill="#aab9c8"/><rect x="19" y="5" width="1" height="1" fill="#5f7386"/><rect x="20" y="5" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="15" y="6" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="16" y="6" width="1" height="1" fill="#e8eef4"/><rect x="17" y="6" width="1" height="1" fill="#aab9c8"/><rect x="18" y="6" width="1" height="1" fill="#5f7386"/><rect x="19" y="6" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="14" y="7" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="15" y="7" width="1" height="1" fill="#e8eef4"/><rect x="16" y="7" width="1" height="1" fill="#aab9c8"/><rect x="17" y="7" width="1" height="1" fill="#5f7386"/><rect x="18" y="7" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="13" y="8" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="14" y="8" width="1" height="1" fill="#e8eef4"/><rect x="15" y="8" width="1" height="1" fill="#aab9c8"/><rect x="16" y="8" width="1" height="1" fill="#5f7386"/><rect x="17" y="8" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="12" y="9" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="13" y="9" width="1" height="1" fill="#e8eef4"/><rect x="14" y="9" width="1" height="1" fill="#aab9c8"/><rect x="15" y="9" width="1" height="1" fill="#5f7386"/><rect x="16" y="9" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="6" y="10" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="11" y="10" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="12" y="10" width="1" height="1" fill="#e8eef4"/><rect x="13" y="10" width="1" height="1" fill="#aab9c8"/><rect x="14" y="10" width="1" height="1" fill="#5f7386"/><rect x="15" y="10" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="5" y="11" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="6" y="11" width="1" height="1" fill="#ffd866"/><rect x="7" y="11" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="10" y="11" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="11" y="11" width="1" height="1" fill="#e8eef4"/><rect x="12" y="11" width="1" height="1" fill="#aab9c8"/><rect x="13" y="11" width="1" height="1" fill="#5f7386"/><rect x="14" y="11" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="5" y="12" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="6" y="12" width="2" height="1" fill="#e0a92a"/><rect x="8" y="12" width="2" height="1" fill="#0a0a0a" class="o"/><rect x="10" y="12" width="1" height="1" fill="#e8eef4"/><rect x="11" y="12" width="1" height="1" fill="#aab9c8"/><rect x="12" y="12" width="1" height="1" fill="#5f7386"/><rect x="13" y="12" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="6" y="13" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="7" y="13" width="1" height="1" fill="#93631a"/><rect x="8" y="13" width="1" height="1" fill="#e0a92a"/><rect x="9" y="13" width="1" height="1" fill="#e8eef4"/><rect x="10" y="13" width="1" height="1" fill="#aab9c8"/><rect x="11" y="13" width="1" height="1" fill="#5f7386"/><rect x="12" y="13" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="7" y="14" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="8" y="14" width="1" height="1" fill="#93631a"/><rect x="9" y="14" width="1" height="1" fill="#e0a92a"/><rect x="10" y="14" width="1" height="1" fill="#5f7386"/><rect x="11" y="14" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="6" y="15" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="7" y="15" width="1" height="1" fill="#5b3a1c"/><rect x="8" y="15" width="1" height="1" fill="#8a5a2b"/><rect x="9" y="15" width="1" height="1" fill="#93631a"/><rect x="10" y="15" width="1" height="1" fill="#e0a92a"/><rect x="11" y="15" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="5" y="16" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="6" y="16" width="1" height="1" fill="#8a5a2b"/><rect x="7" y="16" width="1" height="1" fill="#5b3a1c"/><rect x="8" y="16" width="2" height="1" fill="#0a0a0a" class="o"/><rect x="10" y="16" width="1" height="1" fill="#93631a"/><rect x="11" y="16" width="1" height="1" fill="#e0a92a"/><rect x="12" y="16" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="4" y="17" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="5" y="17" width="1" height="1" fill="#5b3a1c"/><rect x="6" y="17" width="1" height="1" fill="#8a5a2b"/><rect x="7" y="17" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="10" y="17" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="11" y="17" width="1" height="1" fill="#93631a"/><rect x="12" y="17" width="1" height="1" fill="#ffd866"/><rect x="13" y="17" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="2" y="18" width="2" height="1" fill="#0a0a0a" class="o"/><rect x="4" y="18" width="1" height="1" fill="#8a5a2b"/><rect x="5" y="18" width="1" height="1" fill="#5b3a1c"/><rect x="6" y="18" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="11" y="18" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="12" y="18" width="1" height="1" fill="#e0a92a"/><rect x="13" y="18" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="1" y="19" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="2" y="19" width="2" height="1" fill="#ffd866"/><rect x="4" y="19" width="1" height="1" fill="#e0a92a"/><rect x="5" y="19" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="12" y="19" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="0" y="20" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="1" y="20" width="1" height="1" fill="#ffd866"/><rect x="2" y="20" width="1" height="1" fill="#ffffff"/><rect x="3" y="20" width="1" height="1" fill="#8f97ff"/><rect x="4" y="20" width="1" height="1" fill="#e0a92a"/><rect x="5" y="20" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="0" y="21" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="1" y="21" width="1" height="1" fill="#e0a92a"/><rect x="2" y="21" width="1" height="1" fill="#3340ff"/><rect x="3" y="21" width="1" height="1" fill="#1c23a8"/><rect x="4" y="21" width="1" height="1" fill="#93631a"/><rect x="5" y="21" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="1" y="22" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="2" y="22" width="2" height="1" fill="#93631a"/><rect x="4" y="22" width="1" height="1" fill="#0a0a0a" class="o"/><rect x="2" y="23" width="2" height="1" fill="#0a0a0a" class="o"/></svg>
     <b>PLAYTEST LENS</b>
   </div>
   <nav class="feed-tabs" role="tablist" aria-label="Bug lists">
@@ -495,6 +509,19 @@
   </footer>
 </dialog>
 
+<dialog id="circleDlg" class="wide" aria-labelledby="circleTitle">
+  <header><span class="label" id="circleTitle">CIRCLE THE PROBLEM</span></header>
+  <div class="body">
+    <p class="help" style="margin:0">Drag a box over what looks wrong: it becomes a red circle. Drag a circle to move it; drag outside one for another.</p>
+    <div class="drawbox" id="drawbox"></div>
+  </div>
+  <footer>
+    <button class="btn" id="ciUndo" style="margin-right:auto">Undo</button>
+    <button class="btn" id="ciCancel">Cancel</button>
+    <button class="btn primary" id="ciSave">Save picture</button>
+  </footer>
+</dialog>
+
 <dialog id="cleanDlg" aria-labelledby="cleanTitle">
   <header><span class="label" id="cleanTitle">DELETE OLD BUGS</span></header>
   <div class="body">
@@ -592,6 +619,7 @@ async function refresh() {
     for (const b of s.bugs) if (!known.has(b.id)) $('#announce').textContent = `${CHIP[b.kind] || 'BUG'} saved, ${shortTime(b.time)}`;
   }
   renderLive(); renderFeed(); status(s);
+  if (checks && s.live && s.live.version !== checks.build) loadChecks();     // a new build was installed while Lens ran
 }
 
 function renderLive() {
@@ -649,7 +677,7 @@ function renderFeed() {
       <span class="dot" aria-hidden="true"></span>
       <span class="t">${esc(shortTime(b.time))}</span>
       <span class="chip k-${esc(b.kind)}">${CHIP[b.kind] || esc(b.kind.toUpperCase())}</span>
-      <span class="title">${esc(b.title || 'Marked by tester')}</span>
+      <span class="title">${b.seen > 1 ? `<b class="times" title="Saved ${b.seen} times with the same error">×${b.seen}</b> ` : ''}${esc(b.title || 'Marked by tester')}</span>
       <span class="ctx">${esc(b.situation || b.summary || '')}</span>
       <span class="len ${b.clip ? '' : 'nil'}">${b.clip ? (b.clip_seconds ? Math.round(b.clip_seconds) + ' s' : 'clip') : 'no clip'}</span>
       <span class="sent">${b.sent ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#3340FF" stroke-width="2" role="img" aria-label="Sent to Discord"><path d="M3 8.5l3 3 7-7"/></svg>' : ''}</span>
@@ -675,6 +703,77 @@ function setView(v) {
   moveInk();
   renderDetail();
   replay($('#detailBody'), 'enter', 400);
+}
+
+// The moment picture with the tester's circles: circled.jpg, drawn here and saved by the server next to moment.jpg.
+let picVer = 0, circles = [];
+const picUrl = () => `/files/${encodeURIComponent(bug.id)}/${bug.files.includes('circled.jpg') ? 'circled.jpg?v=' + picVer : 'moment.jpg'}`;
+function picRow() {
+  if (!bug.files.includes('moment.jpg')) return '';
+  return bug.files.includes('circled.jpg')
+    ? `<div class="picrow"><img src="${picUrl()}" alt="Your circled picture"><span class="help">Circled: this picture goes with the bug to Discord and the report.</span>
+       <button class="btn slim" id="aCircle">Redraw</button><button class="btn slim" id="aUncircle">Remove circles</button></div>`
+    : `<div class="picrow"><button class="btn slim" id="aCircle" title="Draw a circle on the picture of the moment, so the devs see where to look">Circle the problem</button></div>`;
+}
+
+function radii(c, w) { return [Math.max(Math.abs(c.x2 - c.x1) / 2 * 1.15, w * 0.012), Math.max(Math.abs(c.y2 - c.y1) / 2 * 1.15, w * 0.012)]; }
+
+function drawCircles(ctx, list, live) {
+  const w = ctx.canvas.width;
+  for (const c of live ? [...list, live] : list) {
+    const [rx, ry] = radii(c, w);
+    for (const [color, width] of [['rgba(0,0,0,.55)', w * 0.009], ['#ff2b2b', w * 0.005]]) {   // dark edge: red alone vanishes on busy grass
+      ctx.beginPath(); ctx.ellipse((c.x1 + c.x2) / 2, (c.y1 + c.y2) / 2, rx, ry, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = color; ctx.lineWidth = Math.max(width, 2); ctx.stroke();
+    }
+  }
+}
+
+async function openCircle() {
+  $('#drawbox').innerHTML = `<img id="circleImg" alt="The game's screen at the moment of the bug" src="/files/${encodeURIComponent(bug.id)}/moment.jpg">
+    <canvas id="circleCanvas" aria-label="Drawing area: drag to circle the problem"></canvas>`;
+  const img = $('#circleImg'), cv = $('#circleCanvas');
+  circles = [];
+  if (bug.files.includes('circles.json')) {        // Redraw: start from the saved circles, so they can be moved
+    try { circles = await (await fetch(`/files/${encodeURIComponent(bug.id)}/circles.json?v=${picVer}`)).json(); } catch { circles = []; }
+  }
+  const fit = () => { cv.width = img.naturalWidth; cv.height = img.naturalHeight; redraw(); };
+  const ctx = cv.getContext('2d');
+  const redraw = live => { ctx.clearRect(0, 0, cv.width, cv.height); drawCircles(ctx, circles, live); };
+  img.complete && img.naturalWidth ? fit() : img.onload = fit;
+  const at = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height]; };
+  const hit = ([x, y]) => circles.findLastIndex(c => {
+    const [rx, ry] = radii(c, cv.width);
+    return ((x - (c.x1 + c.x2) / 2) / rx) ** 2 + ((y - (c.y1 + c.y2) / 2) / ry) ** 2 <= 1;
+  });
+  let start = null, moving = -1, last = null;
+  cv.onpointerdown = e => { cv.setPointerCapture(e.pointerId); start = last = at(e); moving = hit(start); };
+  cv.onpointermove = e => {
+    const p = at(e);
+    if (!start) { cv.style.cursor = hit(p) >= 0 ? 'move' : 'crosshair'; return; }
+    if (moving >= 0) {
+      const c = circles[moving], dx = p[0] - last[0], dy = p[1] - last[1];
+      c.x1 += dx; c.x2 += dx; c.y1 += dy; c.y2 += dy; last = p; redraw();
+    } else redraw({x1: start[0], y1: start[1], x2: p[0], y2: p[1]});
+  };
+  cv.onpointerup = e => {
+    if (!start) return;
+    const [x, y] = at(e);
+    if (moving < 0) circles.push({x1: start[0], y1: start[1], x2: x, y2: y});   // a plain click gives a small circle
+    start = null; moving = -1; redraw();
+  };
+  $('#ciUndo').onclick = () => { circles.pop(); redraw(); };
+  $('#ciCancel').onclick = () => $('#circleDlg').close();
+  $('#ciSave').onclick = async () => {
+    if (!circles.length) return msg('Drag over the problem first.', true);
+    const out = document.createElement('canvas'); out.width = cv.width; out.height = cv.height;
+    const o = out.getContext('2d'); o.drawImage(img, 0, 0); drawCircles(o, circles);
+    const jpeg = out.toDataURL('image/jpeg', 0.9).split(',')[1];
+    const r = await post(`/api/bug/${encodeURIComponent(bug.id)}/circled`, {jpeg, circles});
+    if (!r.ok) return msg('Couldn’t save the picture.', true);
+    $('#circleDlg').close(); bug = await r.json(); picVer++; renderDetail(); msg('Saved. The circled picture goes with this bug to Discord and the report.');
+  };
+  $('#circleDlg').showModal();
 }
 
 function renderDetail() {
@@ -716,7 +815,7 @@ function renderDetail() {
   let main = '';
   if (view === 'clip') {
     if (!has('clip.mp4') && !has('full.mp4')) main = `<p class="none" style="padding:0">No video for this bug: no video was arriving from the phone when it was marked (cable, adb, or the screen was off).</p>
-      ${has('moment.jpg') ? `<img class="moment" src="/files/${encodeURIComponent(bug.id)}/moment.jpg" alt="The game's screen at the moment of the bug">` : ''}`;
+      ${has('moment.jpg') ? `<img class="moment" src="${picUrl()}" alt="The game's screen at the moment of the bug">${picRow()}` : ''}`;
     else {
       if (has('clip.mp4') && has('full.mp4')) $('#headExtra').innerHTML = `<div class="seg" role="tablist" aria-label="Which video">
           <button role="tab" data-clip="clip.mp4" aria-selected="${clipName==='clip.mp4'}">15 s clip</button>
@@ -728,7 +827,7 @@ function renderDetail() {
           <span class="label" title="Errors the game wrote to its log, at the moment they happened. Hover a mark to read it">Game errors</span><div class="track" id="logTrack"></div>
           <span></span><div class="scrub" id="scrub" role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
             <div class="fill" id="fill"></div><div class="head" id="head"></div><div class="ticks" id="ticks"></div></div>
-        </div>`;
+        </div>${picRow()}`;
     }
   } else if (view === 'report') {
     main = `<label class="sr" for="reportText">Report (Markdown)</label>
@@ -820,6 +919,9 @@ function wireDetail() {
     const r = await post('/api/checks', {add: bug.meta.note || bug.meta.title});
     if (!r.ok) return msg((await r.json()).error, true);
     checks = await r.json(); $('#nChecks').textContent = checks.checks.length; msg('Added to checks.');
+  }); on('#aCircle', openCircle); on('#aUncircle', async () => {
+    const r = await post(`/api/bug/${encodeURIComponent(bug.id)}/circled`, {jpeg: null});
+    if (r.ok) { bug = await r.json(); renderDetail(); msg('Circles removed.'); }
   }); on('#aCopy', copyMd); on('#aClip', copyClip); on('#aDismiss', () => act('dismiss')); on('#aRestore', () => act('restore')); on('#aSave', saveReport);
 }
 
@@ -869,7 +971,7 @@ async function copyClip() {
   msg(`Copying ${what.toLowerCase()}…`);
   const r = await post(`/api/bug/${encodeURIComponent(bug.id)}/discord-clip`, {copy: true, file});
   const out = await r.json();
-  msg(r.ok ? `${what} copied (${out.mb} MB). Click into Discord and press ⌘V.` : out.error, !r.ok);
+  msg(r.ok ? `${what}${out.picture ? ' and your circled picture' : ''} copied (${out.mb} MB). Click into Discord and press ⌘V.` : out.error, !r.ok);
 }
 
 async function exportIssue() {
@@ -923,8 +1025,8 @@ async function discordText(details) {
 }
 
 function showAttach() {
-  const clip = bug.files.includes('clip.mp4'), pic = bug.files.includes('moment.jpg');
-  const files = [clip && 'clip.mp4', pic && (!clip || $('#dDetails').checked) && 'moment.jpg'].filter(Boolean);
+  const clip = bug.files.includes('clip.mp4'), pic = bug.files.includes('moment.jpg'), circled = bug.files.includes('circled.jpg');
+  const files = [clip && 'clip.mp4', circled ? 'circled.jpg' : pic && (!clip || $('#dDetails').checked) && 'moment.jpg'].filter(Boolean);
   $('#discordAttach').innerHTML = files.length ? files.map(f => `<span>${esc(f)}</span>`).join('') : '<span>No clip or picture for this bug</span>';
 }
 
@@ -999,7 +1101,7 @@ async function openClean() {
   };
 }
 
-let checks = null;
+let checks = null, openClip = null;   // openClip: the failed check's bug whose clip is open
 async function loadChecks() {
   try { const r = await fetch('/api/checks'); if (!r.ok) return; checks = await r.json(); } catch { return; }
   renderChecks();
@@ -1018,12 +1120,18 @@ function renderChecks() {
   $('#ckHead').innerHTML = checks.checks.length ? `<tr><th>Check</th>${older.map(b => `<th>${esc(b)}</th>`).join('')}<th>${esc(build || 'This build')}</th><th></th></tr>` : '';
   const run = checks.runs[build] || {};
   const mark = r => r === 'pass' ? '✅' : r === 'fail' ? '❌' : '–';
+  const clipOf = (b, id) => ((checks.bugs || {})[b] || {})[id];
+  const clipBtn = (b, id) => clipOf(b, id) ? `<button class="ckclip" data-bug="${esc(clipOf(b, id))}" aria-expanded="${openClip === clipOf(b, id)}" title="Show the clip of this fail">▶ Clip</button>` : '';
   $('#ckBody').innerHTML = checks.checks.length ? checks.checks.map(c => {
     const r = run[c.id];
-    return `<tr><td>${esc(c.text)}</td>${older.map(b => `<td class="old">${mark((checks.runs[b] || {})[c.id])}</td>`).join('')}
+    const shown = [build, ...older].map(b => clipOf(b, c.id)).find(x => x && x === openClip);
+    return `<tr><td>${esc(c.text)}</td>${older.map(b => `<td class="old">${mark((checks.runs[b] || {})[c.id])}${clipBtn(b, c.id)}</td>`).join('')}
       <td><div class="now"><button class="pass" data-id="${c.id}" data-res="pass" aria-pressed="${r === 'pass'}">Pass</button>
-      <button class="fail" data-id="${c.id}" data-res="fail" aria-pressed="${r === 'fail'}">Fail</button></div></td>
-      <td><button class="x" data-id="${c.id}" aria-label="Remove this check" title="Remove">×</button></td></tr>`;
+      <button class="fail" data-id="${c.id}" data-res="fail" aria-pressed="${r === 'fail'}">Fail</button>${clipBtn(build, c.id)}</div></td>
+      <td><button class="x" data-id="${c.id}" aria-label="Remove this check" title="Remove">×</button></td></tr>${shown ? `
+      <tr class="ckvideo"><td colspan="${older.length + 3}"><video src="/files/${encodeURIComponent(shown)}/clip.mp4" controls autoplay muted playsinline
+        onerror="this.replaceWith(Object.assign(document.createElement('p'), {className: 'help', textContent: 'No clip yet: it takes about 5 s to save, and there is none if the phone’s screen was off or the bug was deleted.'}))"></video>
+        <button class="btn slim" data-open="${esc(shown)}">Open the bug</button></td></tr>` : ''}`;
   }).join('') : '<tr><td class="none" style="border:0;padding:0">No checks yet. Add the things to re-test on every build, or press “Add to checks” on a bug.</td></tr>';
 }
 
@@ -1106,6 +1214,9 @@ $('#ckCopy').onclick = async () => {
   catch { msg('Couldn’t reach the clipboard.', true); }
 };
 $('#ckBody').addEventListener('click', async e => {
+  const c = e.target.closest('.ckclip'), o = e.target.closest('[data-open]');
+  if (c) { openClip = openClip === c.dataset.bug ? null : c.dataset.bug; return renderChecks(); }
+  if (o) { showChecks(false); list = 'bugs'; renderFeed(); return select(o.dataset.open); }
   const b = e.target.closest('button[data-id]'); if (!b) return;
   const id = +b.dataset.id;
   const body = b.dataset.res === undefined ? {remove: id} : {id, result: b.getAttribute('aria-pressed') === 'true' ? '' : b.dataset.res};

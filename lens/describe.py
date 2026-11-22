@@ -5,6 +5,7 @@ under the finger (read off the frame just before it with macOS Vision: JUMP, SWI
 where on the screen it was. The situation is the text along the top of the screen at the bug (in GFL,
 the scoreboard: down, clock, score).
 """
+import difflib
 import re
 import subprocess
 import tempfile
@@ -114,7 +115,56 @@ def situation(lines):
     def game_text(t):     # scoreboard words and scores; not the phone's status bar ("* Ш kB/s", "08:57 0 0 9")
         return re.fullmatch(r"[A-Za-z0-9 :.&'!%-]+", t) and (re.search(r'[A-Za-z]', t) or re.fullmatch(r'\d{1,3}', t))
     top = sorted((l for l in lines if l[2] + l[4] / 2 < TOP), key=lambda l: l[1])
-    return ' · '.join(t for l in top if not in_meter(l) and (t := no_meter(l[0])) and game_text(t))
+    return scoreboard(' · '.join(t for l in top if not in_meter(l) and (t := no_meter(l[0])) and game_text(t)))
+
+
+# GFL's play calls: on defense PREVENT / PRESSURE / BLITZ (read off the 15 fps play screen in real clips);
+# on offense the team's name and a number, 'CHICAGO 1', 'CHICAGO 2' (the tester's word).
+PLAYS = {'PREVENT', 'PRESSURE', 'BLITZ'}
+OFFENSE = re.compile(r"[A-Z][A-Z .'-]{2,} \d{1,2}")
+
+
+def play_called(names):
+    """The last play call the tester tapped, from the tap names in order ('dragged BLITZ' counts), or None."""
+    for what in reversed(names):
+        word = re.sub(r'^(dragged|held)\s+', '', what).strip().upper()
+        if word in PLAYS or OFFENSE.fullmatch(word):
+            return word
+    return None
+
+
+ORDINAL = {'FIRST': '1st', 'SECOND': '2nd', 'THIRD': '3rd', 'FOURTH': '4th'}
+
+
+def scoreboard(raw):
+    """Only the parts of the scoreboard OCR read reliably: '2nd & 10 · 0:15 Q3 · CHICAGO 21 – NEW ENGLAND 14'.
+    '' when it shows neither the down nor the clock (a menu, an ad, or OCR junk like '1E22').
+    Safe to run on its own output, so old saved readings can be cleaned the same way."""
+    out = []
+    if m := re.search(r'(?<!\S)(1st|2nd|3rd|4th|\?) & (\d{1,2}|GOAL)(?!\S)', raw):    # already cleaned
+        out.append(f'{m[1]} & {m[2]}')
+    elif m := re.search(r'(?:([A-Z]+)\s+)?D?OWN AND (\w+)', raw, re.I):
+        word = difflib.get_close_matches((m[1] or '').upper(), ORDINAL, n=1, cutoff=0.6)   # 'FIROT' -> FIRST
+        dist = m[2].upper() if re.fullmatch(r'\d{1,2}|GOAL', m[2], re.I) else '?'
+        if word or dist != '?':
+            out.append(f"{ORDINAL[word[0]] if word else '?'} & {dist}")
+    clock = re.search(r'\b(\d{1,2}:\d\d)\s*·?\s*(Q[1-4]|OT)\b', raw)
+    if clock:
+        out.append(f'{clock[1]} {clock[2]}')
+        teams, name = [], []
+        for tok in re.findall(r"[A-Z][A-Z.'&-]*|\d{1,3}", raw[clock.end():]):
+            if tok.isdigit():
+                if name:
+                    teams.append(f"{' '.join(name)} {tok}"); name = []
+            else:
+                name.append(tok)
+                continue
+        if name:
+            teams.append(' '.join(name))
+        teams = [t for t in teams if len(re.sub(r'[\d ]', '', t)) >= 5][:2]      # team names, not scraps like 'LERR'
+        if teams:
+            out.append(' – '.join(teams))
+    return ' · '.join(out) if out else ''
 
 
 # Lens's FPS meter: 195 x 55 px at (24, 24) in clips about 2400 x 1080 (meter.py, video.py). Text read wholly
@@ -165,4 +215,6 @@ def describe(clip, touches, t0, moment):
         for t, p in sorted(shots, key=lambda tp: abs(tp[0] - moment) + (0.5 if tp[0] > moment else 0)):
             if (sit := situation(read.get(str(p), []))):
                 break
+        if play := play_called([w for _, w, _ in did]):
+            sit = f'{sit} · play called: {play}' if sit else f'play called: {play}'
     return {'did': [(at, what) for at, what, _ in did], 'summary': summary([(w, h) for _, w, h in did]), 'situation': sit}

@@ -33,13 +33,18 @@ def remove(data, check_id):
     data['checks'] = [c for c in data['checks'] if c['id'] != check_id]
 
 
-def result(data, build, check_id, res):
-    """res: 'pass', 'fail', or None to clear it."""
+def result(data, build, check_id, res, bug=None):
+    """res: 'pass', 'fail', or None to clear it. bug: the id of the bug a fail was marked as (its clip)."""
     run = data['runs'].setdefault(build, {})
+    clips = data.setdefault('bugs', {}).setdefault(build, {})
     if res:
         run[str(check_id)] = res
     else:
         run.pop(str(check_id), None)
+    if bug:
+        clips[str(check_id)] = bug
+    else:
+        clips.pop(str(check_id), None)
     data['last_build'] = build
 
 

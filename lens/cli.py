@@ -140,9 +140,10 @@ def cmd_watch(a):
             has_clip = (folder / 'clip.mp4').exists()
             bugs.update(folder, ev, now, tw, has_clip, t0, BEFORE + AFTER)   # lists full.mp4, and a comment typed meanwhile
             if not has_clip:
-                print('\n● Saved WITHOUT a clip: no video was arriving from the phone. Check the cable.', flush=True)
+                why = 'the phone\'s screen is off' if adb.screen_off(serial) else 'no video was arriving from the phone. Check the cable'
+                print(f'\n● Saved WITHOUT a clip: {why}.', flush=True)
                 if sounds_on():
-                    alert.ding('A mark was saved without a clip. Check the cable.')
+                    alert.ding(f'A mark was saved without a clip: {why}.')
         print(f'\n● {ev.kind.upper()} saved: {folder}', flush=True)
 
     def catch(ev):
@@ -185,6 +186,7 @@ def cmd_watch(a):
         when = time.strftime('%H:%M:%S', time.localtime(ev.ts))
         print(f'\n● MARKED {when}: {note}' if note else
               f'\n● MARKED {when}. Type what went wrong + Enter whenever you\'re ready (Enter alone marks another).', flush=True)
+        return ev
 
     def add_note(text):
         done = marked.note(text)
@@ -302,7 +304,13 @@ def cmd_watch(a):
     try:
         while True:
             time.sleep(2)
+            old = pids['set']
             pids['set'] = adb.pids(serial, a.package) or pids['set']   # keep the old pid while it is dying
+            if pids['set'] != old:      # a new game process: maybe a new build was installed while Lens ran
+                v = adb.info(serial, a.package)['game_version']
+                if v not in ('?', meta['game_version']):
+                    meta['game_version'] = live.version = v
+                    print(f'\n● New build: {a.package} {v}', flush=True)
             note_pids()
             if ts:   # games turn the screen sideways after Lens starts: map taps with the current rotation
                 try:

@@ -86,6 +86,13 @@ Touches are recorded from `adb shell getevent` with timestamps and replayed with
   install and no clean `System.exit(0)` (GFL exits that way when you back out). Background deaths aren't reported: Android
   ends background games all the time. (`rms_NormalReclaimer: doFastKill ... package: superfusion.gfl` looked like a kill
   but is memory freed *for* GFL as it opens.)
+- **Done (22 Nov):** game closed, phone health, regression checks (Checks tab; a fail is a bug with its clip, ▶ Clip in
+  the table), circle the problem (`circled.jpg` beside `moment.jpg`, sent to Discord), seen again (crash, ANR, text and
+  game-closed bugs with the same error, numbers ignored: `×N` in the feed, "Seen before" in the report), and a clean
+  scoreboard (only the down, clock and score OCR recognises; junk dropped) plus the play called (PREVENT / PRESSURE /
+  BLITZ on defense, team + number like CHICAGO 2 on offense) as step 1 of the report.
+- **Left:** menu checks replayed through the virtual touchscreen (needs one test with the phone awake)
+  and a repro rate (the Checks table already shows pass/fail per build).
 - **Keep it simple:** every addition has to earn its place on the page; no new settings.
 
 ## Phase 1 design (the useful core)

@@ -1,5 +1,6 @@
 """One folder per bug: clip, logs, touches, metadata and a report a tester can paste."""
 import json
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -18,6 +19,33 @@ def title(ev):
     if ev.kind in SEEN:
         return ev.note or (ev.lines[0] if ev.lines else KIND_LABEL[ev.kind])
     return headline(ev.lines) or KIND_LABEL[ev.kind]
+
+
+GROUPED = ('crash', 'anr', 'text', 'closed')   # the same error text = the same bug; lag, freeze, glitch and marks differ each time
+
+
+def signature(kind, title):
+    """What makes two bugs the same: the error with its numbers (pids, addresses, line numbers) left out. None: not grouped."""
+    return f"{kind}:{re.sub(r'0x[0-9a-f]+|\d+', '#', title.lower())}" if kind in GROUPED else None
+
+
+def seen_before(folder, kind, title_text):
+    """[(bug id, game version)] of the saved bugs before this one with the same error, oldest first (false alarms don't count)."""
+    folder = Path(folder)
+    sig = signature(kind, title_text)
+    if not sig or folder.parent.name == FALSE:
+        return []
+    out = []
+    for f in sorted(folder.parent.iterdir()):
+        if f.name >= folder.name or not f.is_dir() or f.name.startswith(('_', '.')):
+            continue
+        try:
+            m = json.loads((f / 'meta.json').read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            continue
+        if signature(m.get('kind'), m.get('title', '')) == sig:
+            out.append((f.name, m.get('game_version', '?')))
+    return out
 
 
 def stamp(ts):
@@ -48,7 +76,13 @@ def report(ev, meta, touches, folder=None, t0=None, clip_seconds=None, desc=None
     situation = f"| On screen | {desc['situation']} |\n" if desc and desc.get('situation') else ''
     from .health import line as health_line
     phone = f"| Phone | {health_line(meta['health'])} |\n" if meta.get('health') else ''
-    moment = '\n![the moment of the bug](moment.jpg)\n' if folder and (folder / 'moment.jpg').exists() else ''
+    before = seen_before(folder, ev.kind, title(ev)) if folder else []
+    if before:
+        first = time.strptime(before[0][0].split('_')[0], '%Y%m%d-%H%M%S')
+        builds = ', '.join(dict.fromkeys(v for _, v in before))
+        phone += f"| Seen before | {len(before)} time{'s' * (len(before) > 1)}, first {time.strftime('%d %b %H:%M', first)} · builds {builds} |\n"
+    pic = picture(folder) if folder else None
+    moment = f'\n![the moment of the bug]({pic.name})\n' if pic else ''
     if ev.kind == 'manual':
         actual = ev.note or '_Describe what went wrong (see clip.mp4)._'
         expected = '_What should have happened?_'
@@ -64,6 +98,9 @@ def report(ev, meta, touches, folder=None, t0=None, clip_seconds=None, desc=None
     length = f'{clip_seconds:.0f} s' if clip_seconds else 'the moments'
     heading = title(ev)
     repro = ''
+    if desc and desc.get('situation') and desc.get('did'):     # without an AI draft: start from the same spot, press the same
+        repro = (f"## Steps to reproduce\n1. Get to the same spot: {desc['situation']}\n"
+                 f"2. Press what the tester pressed (below), then watch for the bug.\n\n")
     if ai:      # a local model's draft (writer.py): its words for title, actual, expected and steps
         heading, actual, expected = ai['title'], ai.get('actual') or actual, ai.get('expected') or expected
         if ai.get('steps'):
@@ -90,9 +127,13 @@ def report(ev, meta, touches, folder=None, t0=None, clip_seconds=None, desc=None
 """
 
 
+def bug_id(ev):
+    return f"{time.strftime('%Y%m%d-%H%M%S', time.localtime(ev.ts))}_{ev.kind}"
+
+
 def write(root, ev, meta, logs, touches, make_clip, t0=None, clip_seconds=None):
     """Writes the bug folder; `make_clip(path)` cuts the video. Returns the folder."""
-    folder = Path(root) / f"{time.strftime('%Y%m%d-%H%M%S', time.localtime(ev.ts))}_{ev.kind}"
+    folder = Path(root) / bug_id(ev)
     folder.mkdir(parents=True, exist_ok=True)
     has_clip = make_clip(folder / 'clip.mp4')
     desc = None
@@ -169,13 +210,20 @@ def listing(root):
             return None
         d = folder / 'describe.json'
         desc = json.loads(d.read_text(encoding='utf-8')) if d.exists() else {}
-        return {'id': folder.name, 'kind': m.get('kind', 'manual'), 'time': m.get('time', ''), 'title': m.get('title', ''),
+        return {'id': folder.name, 'kind': m.get('kind', 'manual'), 'sig': signature(m.get('kind'), m.get('title', '')), 'time': m.get('time', ''), 'title': m.get('title', ''),
                 'note': m.get('note') or '', 'clip': (folder / 'clip.mp4').exists(), 'full': (folder / 'full.mp4').exists(),
                 'clip_seconds': m.get('clip_seconds'), 'sent': (folder / 'discord.json').exists(), 'situation': desc.get('situation', ''), 'summary': desc.get('summary', '')}
 
     def rows(where):
         found = [row(f) for f in where.iterdir() if f.is_dir() and not f.name.startswith(('_', '.'))] if where.exists() else []
-        return sorted((r for r in found if r), key=lambda r: r['id'], reverse=True)
+        found = sorted((r for r in found if r), key=lambda r: r['id'], reverse=True)
+        counts = {}
+        for r in found:
+            counts[r['sig']] = counts.get(r['sig'], 0) + 1
+        for r in found:
+            sig = r.pop('sig')
+            r['seen'] = counts[sig] if sig else 1      # how many saved bugs share this error, this one included
+        return found
     return {'bugs': rows(root), 'false_alarms': rows(root / FALSE)}
 
 
@@ -260,6 +308,27 @@ def save_report(root, bug_id, text):
     (folder / 'report.md').write_text(text, encoding='utf-8')
     (folder / 'report.edited.md').write_text(text, encoding='utf-8')
     return True
+
+
+def picture(folder):
+    """The bug's picture: the one the tester circled the problem on, else the plain moment.jpg. None if neither."""
+    return next((p for p in (Path(folder) / 'circled.jpg', Path(folder) / 'moment.jpg') if p.exists()), None)
+
+
+def set_circled(root, bug_id, jpeg, circles=()):
+    """Saves the moment picture with the tester's circles (circled.jpg; moment.jpg stays as it was), or removes it (None)."""
+    folder = find(root, bug_id)
+    if not folder:
+        return None
+    if jpeg:
+        (folder / 'circled.jpg').write_bytes(jpeg)
+        (folder / 'circles.json').write_text(json.dumps(list(circles)), encoding='utf-8')
+    else:
+        (folder / 'circled.jpg').unlink(missing_ok=True)
+        (folder / 'circles.json').unlink(missing_ok=True)
+    ev, meta, touches, m = load(folder)
+    update(folder, ev, meta, touches, (folder / 'clip.mp4').exists(), m.get('clip_start'), m.get('clip_seconds'))
+    return folder
 
 
 def set_note(root, bug_id, text):
