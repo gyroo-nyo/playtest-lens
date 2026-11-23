@@ -352,6 +352,8 @@ def cmd_ui(a):
 
 
 BUGS = Path(__file__).resolve().parent.parent / 'bugs'     # one bugs folder, whichever folder you start from
+if getattr(sys, 'frozen', False):                          # the Windows app: its own folder isn't the place for bugs
+    BUGS = Path.home() / 'Documents' / 'Playtest Lens' / 'bugs'
 COMMANDS = {'devices', 'watch', 'ui', '-h', '--help'}
 
 
@@ -359,6 +361,8 @@ def simple(argv):
     """`lens` alone watches the last game; `lens <package>` watches that one."""
     if not argv or (argv[0].startswith('-') and argv[0] not in COMMANDS):   # `lens` or `lens --port 8738`
         package = ui.settings(BUGS).get('package')
+        if not package and sys.stdin.isatty():           # first run from a double-click: ask instead of quitting
+            package = input("Which game? Its package name, e.g. superfusion.gfl: ").strip()
         if not package:
             sys.exit('Which game? Run: lens <package>, e.g. lens superfusion.gfl (next time just: lens)')
         return ['watch', package, *argv]

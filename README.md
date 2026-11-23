@@ -18,7 +18,9 @@ lens com.example.game                            # first time: the game's packag
 lens                                             # after that: the same game again
 ```
 
-**On Windows** (10 or 11), in PowerShell:
+**On Windows** (10 or 11): download **[PlaytestLens-Setup.exe](https://github.com/gyroo-nyo/playtest-lens/releases/latest/download/PlaytestLens-Setup.exe)** and run it (adb and ffmpeg included, no Python needed; if Windows says it protected your PC, click More info → Run anyway). Bugs go to `Documents\Playtest Lens\bugs`.
+
+Or from source, in PowerShell:
 
 ```powershell
 winget install Python.Python.3.12 Google.PlatformTools Gyan.FFmpeg    # then open a new terminal
