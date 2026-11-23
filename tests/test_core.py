@@ -1,10 +1,15 @@
 import json
+import shutil
 from pathlib import Path
+
+import pytest
 
 from lens import adb, bugs, freeze, logcat
 from lens.logcat import Event
 from lens.ring import Ring, segments_for
 from lens.touches import Tracker, to_screen
+
+needs_ffmpeg = pytest.mark.skipif(not shutil.which('ffmpeg'), reason='ffmpeg not installed')
 
 FX = Path(__file__).parent / 'fixtures'
 PKG, PIDS = 'superfusion.gfl', {4321}
@@ -107,6 +112,7 @@ def test_manual_note_updates_report(tmp_path):
     assert '[Bug] Ball passes through the goalpost' in (folder / 'report.md').read_text(encoding='utf-8')
 
 
+@needs_ffmpeg
 def test_cut_survives_pruned_segments(tmp_path):
     """A segment deleted by pruning mid-cut is skipped, not fatal; no segments at all means no clip."""
     from lens import video
@@ -624,6 +630,7 @@ def test_no_freeze_when_the_log_is_running_late():
     assert _freeze_run(log_until=10.0) == []
 
 
+@needs_ffmpeg
 def test_clip_that_starts_late_is_timed_from_its_real_start(tmp_path):
     ev = Event('freeze', 112.0, lines=['froze'])
     folder = bugs.write(tmp_path, ev, {'model': 'm', 'android': '16', 'package': 'p', 'game_version': '1'}, [], [], lambda out: 104.0, t0=100.0, clip_seconds=15)
