@@ -89,7 +89,9 @@ class Recorder(threading.Thread):
                 if not quick:
                     print('Recording restarted (screen rotated or the stream was interrupted).', flush=True)
                 elif not paused:   # fails at once, again and again: say it once
-                    print('Recording paused: is the phone screen off or locked? Unlock it and Lens carries on.', flush=True)
+                    from .adb import screen_off
+                    print('Recording paused: the phone screen is off or locked. Unlock it and Lens carries on.' if screen_off(self.serial)
+                          else 'Recording paused for a moment (the game restarting or a screen opening); trying again.', flush=True)
                     paused = True
             if not quick:
                 paused = False
@@ -146,7 +148,8 @@ def last_frame(segments, out):
 
 
 def cut(segments, t0, t1, out, fps=None):
-    """Join the segments and trim to [t0, t1]. Returns False when there is no video.
+    """Join the segments and trim to [t0, t1]. Returns the clip's real start (host ts), or False when there is no video.
+    The start is later than t0 when the video began late (the screen was off, the recorder restarted).
     fps: [(host ts, game fps)] to burn an FPS meter into the top-left corner (re-encodes the clip)."""
     import shutil, tempfile
     # Snapshot the segments first (hard links, so no copying): the recorder prunes old ones
@@ -166,20 +169,34 @@ def cut(segments, t0, t1, out, fps=None):
     if not kept:
         shutil.rmtree(snap, ignore_errors=True)
         return False
+    t0 = max(t0, kept[0][1])        # no video before the first segment: the clip starts there
     listing = snap / 'list.txt'
     listing.write_text(''.join(f"file '{Path(p).as_posix()}'\n" for p, _ in kept), encoding='utf-8')
     start = max(0.0, t0 - kept[0][1])
     # stdin=DEVNULL: ffmpeg reads the terminal for its own keys and would eat the tester's typing.
-    cmd = ['ffmpeg', '-loglevel', 'fatal', '-y', '-f', 'concat', '-safe', '0', '-i', str(listing),
-           '-ss', f'{start:.2f}', '-t', f'{t1 - t0:.2f}']
+    cmd = ['ffmpeg', '-loglevel', 'fatal', '-y', '-f', 'concat', '-safe', '0', '-i', str(listing)]
     if fps:
         from . import meter
         cmd += ['-f', 'concat', '-safe', '0', '-i', str(meter.write(fps, t0, t1, snap)),
-                '-filter_complex', '[1:v]setpts=PTS-STARTPTS[m];[0:v]setpts=PTS-STARTPTS[v];[v][m]overlay=24:24:eof_action=repeat',
+                '-filter_complex', f'[1:v]setpts=PTS-STARTPTS+{start:.3f}/TB[m];[0:v]setpts=PTS-STARTPTS[v];[v][m]overlay=24:24:eof_action=repeat',
                 '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p']
     else:
         cmd += ['-c', 'copy']
+    # the trim is an output option, after every input: placed before the meter's -i it trimmed the meter instead, so
+    # clips came out untrimmed (18 s, not 15) and the bug's moment, taps and meter were off by up to a segment
+    cmd += ['-ss', f'{start:.2f}', '-t', f'{t1 - t0:.2f}']
     done = subprocess.run([*cmd, '-movflags', '+faststart', str(out)], stdin=subprocess.DEVNULL)
     shutil.rmtree(snap, ignore_errors=True)
     # ffmpeg can exit 0 without writing anything (no frames in the segments), so check the file itself
-    return done.returncode == 0 and Path(out).exists() and Path(out).stat().st_size > 0
+    ok = done.returncode == 0 and Path(out).exists() and Path(out).stat().st_size > 0
+    return t0 if ok else False
+
+
+def duration(path):
+    """Length of a video file in seconds, or None."""
+    out = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', str(path)],
+                         stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding='utf-8').stdout
+    try:
+        return float(out)
+    except ValueError:
+        return None

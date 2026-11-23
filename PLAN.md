@@ -91,7 +91,9 @@ Touches are recorded from `adb shell getevent` with timestamps and replayed with
   game-closed bugs with the same error, numbers ignored: `×N` in the feed, "Seen before" in the report), and a clean
   scoreboard (only the down, clock and score OCR recognises; junk dropped) plus the play called (PREVENT / PRESSURE /
   BLITZ on defense, team + number like CHICAGO 2 on offense) as step 1 of the report.
-- **Left:** menu checks replayed through the virtual touchscreen (needs one test with the phone awake)
+- **Virtual touchscreen verified (23 Nov):** `uinput` registered a touchscreen (bus virtual) and GFL got the tap
+  (ACTION_DOWN/UP); it takes the same raw portrait coordinates Lens records from `getevent`, so recorded taps can be replayed as they are.
+- **Left:** menu checks replayed through the virtual touchscreen (now only the feature itself)
   and a repro rate (the Checks table already shows pass/fail per build).
 - **Keep it simple:** every addition has to earn its place on the page; no new settings.
 

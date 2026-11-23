@@ -74,11 +74,16 @@ def snap(label, known):
     """A label half-covered by the finger ('SWIT', 'ISWITCH') → the full one seen elsewhere ('SWITCH')."""
     if not label:
         return label
+    # GFL's buttons are capitals; a lowercase or odd letter is a misread where the finger covers it ('JUr', 'JUř', 'DIVE(')
+    head = re.sub(r'[^A-Z0-9 ]', '', label).strip()
+    odd = head != label.strip()
     for full, _ in sorted(known.items(), key=lambda kv: -kv[1]):
         a, b = label.upper(), full.upper()
         cut_off = len(b) > len(a) >= 3 and b.startswith(a) and len(b) - len(a) <= 3      # 'SWIT' → 'SWITCH'
         stray = len(a) == len(b) + 1 and a.endswith(b) and known[full] > known.get(label, 0)   # 'ISWITCH' → 'SWITCH'
-        if cut_off or stray:
+        misread = odd and (head == full or len(head) >= 2 and full.startswith(head) and len(full) - len(head) <= 3
+                           and known[full] > 2 * known.get(label, 0))
+        if cut_off or stray or misread:
             return full
     return label
 

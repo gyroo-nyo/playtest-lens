@@ -148,6 +148,9 @@ def test_label_snapping():
     known = {'SWITCH': 3, 'SWIT': 9, 'FEINT': 13, 'FEIN': 4, 'ISWITCH': 1}
     assert describe.snap('SWIT', known) == 'SWITCH' and describe.snap('ISWITCH', known) == 'SWITCH'
     assert describe.snap('FEINT', known) == 'FEINT' and describe.snap('FEIN', known) == 'FEINT'
+    # real, 23 Nov: a finger over the label gave 'JUř ×8, JUr ×9' beside 'JUMP ×19', and 'DIVE('
+    seen = {'JUMP': 40, 'JUr': 3, 'JUř': 2, 'DIVE': 30, 'DIVE(': 2, 'cancel': 2}
+    assert [describe.snap(l, seen) for l in ('JUr', 'JUř', 'DIVE(', 'cancel', 'JUMP')] == ['JUMP', 'JUMP', 'DIVE', 'cancel', 'JUMP']
     assert describe.label_at([('JUMP', 0.75, 0.68, 0.06, 0.04)], 0.79, 0.72) == 'JUMP'
     assert describe.label_at([('JUMP', 0.75, 0.68, 0.06, 0.04)], 0.2, 0.7) is None
 
@@ -172,6 +175,7 @@ def play(det, frames, taps, fps=None):
     feed = [(t, 'tap', (x, y)) for t, x, y in taps] + [(t, 'frame', f) for t, f in frames]
     feed += [(t / 1.0, 'fps', fps(t)) for t in range(0, int(max(t for t, _ in frames)) + 1)]
     for t, kind, v in sorted(feed, key=lambda e: e[0]):
+        det.logged(t)          # the phone logs all the time; a live log is the normal case
         if kind == 'fps':
             if v is not None:
                 det.drawing(t, v)
@@ -559,7 +563,7 @@ def test_crash_lines_skip_other_apps():
     assert ev.kind == 'crash' and len(ev.lines) == 4 and not any('libc' in l for l in ev.lines)
 
 
-def _freeze_run(fps_after=None, taps=(11.0, 12.0, 13.0, 14.0), away=False, moving=False):
+def _freeze_run(fps_after=None, taps=(11.0, 12.0, 13.0, 14.0), away=False, moving=False, log_until=None):
     """GFL with the thumb held on the joystick; at 10 s the picture stops. Frames arrive like Android's screen
     recorder sends them: 5 a second while the picture changes, afterwards only when a tap dot appears or goes,
     and Lens ticks 4 times a second in between. fps_after: the game's frame rate after 10 s (None: no lines)."""
@@ -593,6 +597,8 @@ def _freeze_run(fps_after=None, taps=(11.0, 12.0, 13.0, 14.0), away=False, movin
         events += [(round(10 + i * 0.2, 2), 'f', frame(1000 + i)) for i in range(50)]
     events += [(round(10 + i * 0.25, 2), 'tick', None) for i in range(40)]
     for ts, kind, x in sorted(events, key=lambda e: e[0]):
+        if log_until is None or ts <= log_until:
+            d.logged(ts)
         if kind == 'f':
             ev = d.frame(ts, x)
         elif kind == 'tick':
@@ -619,6 +625,19 @@ def test_no_freeze_on_a_still_screen_the_game_still_draws():
 
 def test_no_freeze_on_a_still_screen_that_draws_only_when_tapped():
     assert _freeze_run(fps_after='on_taps', taps=(12.0, 13.23, 14.61)) == []
+
+
+def test_no_freeze_when_the_log_is_running_late():
+    # real, 23 Nov: just after unlocking, adb fell behind: video, taps and the game's frame-rate lines all came late,
+    # so a still picture with no fps lines looked like a freeze while the game drew 40+ fps
+    assert _freeze_run(log_until=10.0) == []
+
+
+def test_clip_that_starts_late_is_timed_from_its_real_start(tmp_path):
+    ev = Event('freeze', 112.0, lines=['froze'])
+    folder = bugs.write(tmp_path, ev, {'model': 'm', 'android': '16', 'package': 'p', 'game_version': '1'}, [], [], lambda out: 104.0, t0=100.0, clip_seconds=15)
+    m = json.loads((folder / 'meta.json').read_text())
+    assert m['clip_start'] == 104.0 and m['clip_seconds'] == 11
 
 
 def test_no_freeze_while_an_ad_is_on_top():

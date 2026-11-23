@@ -27,6 +27,7 @@ TAPS = 3           # taps during that time
 DOT = 9            # pixels ignored around each touch (the Show-taps dot)
 COOLDOWN = 10.0    # one bug per freeze, not one per tap
 TICK = 0.25        # seconds without a new frame before the last one is checked again
+LOG_LAG = 2.0      # newest log line older than this: the adb link is behind, so missing frame-rate lines prove nothing
 
 
 def game_frames(msg, package):
@@ -73,10 +74,14 @@ class Detector:
         self.fps = deque()        # (ts, fps) of the game's surface
         self.logs_fps = False     # has this phone ever logged the game's frame rate?
         self.away = False         # another screen (an ad, the home screen) is on top of the game
+        self.log_ts = 0.0         # time of the newest log line (any line); Android logs ~100+ lines a second
 
     def opened(self, activity, package):
         """An activity started. An ad or another app covers the game until the game draws again."""
         self.away = not activity.startswith(package + '/') or '.ads.' in activity
+
+    def logged(self, ts):
+        self.log_ts = max(self.log_ts, ts)
 
     def drawing(self, ts, fps):
         self.logs_fps = True
@@ -114,6 +119,9 @@ class Detector:
             return None                     # something moved: the game is alive
         if not self.logs_fps or self.away:
             return None                     # can't confirm it, or the game is behind an ad / another app
+        if self.log_ts < ts - LOG_LAG:
+            return None                     # the log is running late (a slow adb link, e.g. just after unlocking): its
+                                            # frame-rate lines may still be on the way, and video and taps arrive late too
         if any(t >= first for t, _ in self.fps):
             return None                     # it drew a frame after the taps: a still screen, not a freeze
         return self.caught('freeze', first, f'The game froze: {len(downs)} taps in {ts - first:.0f} s, '

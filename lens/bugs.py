@@ -53,8 +53,12 @@ def stamp(ts):
 
 
 def moment_image(folder, at):
-    """moment.jpg: the clip's frame at the bug (seconds into the clip)."""
+    """moment.jpg: the clip's frame at the bug (seconds into the clip); its last frame when the bug is past its end
+    (a crash stops the video a moment before the log says so)."""
     clip = Path(folder) / 'clip.mp4'
+    from .video import duration
+    if (length := duration(clip)) and at > length - 0.2:
+        at = max(0.0, length - 0.2)
     return subprocess.run(['ffmpeg', '-nostdin', '-loglevel', 'fatal', '-y', '-ss', f'{max(0.0, at):.2f}', '-i', str(clip),
                            '-frames:v', '1', '-vf', "scale='min(1280,iw)':-2", '-q:v', '3', str(Path(folder) / 'moment.jpg')],
                           stdin=subprocess.DEVNULL).returncode == 0
@@ -135,7 +139,13 @@ def write(root, ev, meta, logs, touches, make_clip, t0=None, clip_seconds=None):
     """Writes the bug folder; `make_clip(path)` cuts the video. Returns the folder."""
     folder = Path(root) / bug_id(ev)
     folder.mkdir(parents=True, exist_ok=True)
-    has_clip = make_clip(folder / 'clip.mp4')
+    got = make_clip(folder / 'clip.mp4')
+    has_clip = bool(got)
+    if has_clip and t0 is not None and got is not True and got > t0:   # the video began late: time the clip from its real start
+        clip_seconds, t0 = (clip_seconds - (got - t0) if clip_seconds else None), got
+    if has_clip and clip_seconds:      # and it can end early (the game crashed, the screen went off)
+        from .video import duration
+        clip_seconds = min(clip_seconds, duration(folder / 'clip.mp4') or clip_seconds)
     desc = None
     if has_clip and t0 is not None:
         moment_image(folder, ev.ts - t0)
@@ -187,6 +197,9 @@ def rebuild(folder):
     ev, meta, touches, m = load(folder)
     t0, length = m.get('clip_start'), m.get('clip_seconds')
     has_clip = (folder / 'clip.mp4').exists()
+    if has_clip and length:
+        from .video import duration
+        length = min(length, duration(folder / 'clip.mp4') or length)
     if has_clip and t0 is not None:
         moment_image(folder, ev.ts - t0)
         from . import describe

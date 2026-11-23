@@ -1,6 +1,7 @@
 """`lens devices` and `lens watch <package>`."""
 import argparse
 import json
+import signal
 import subprocess
 import sys
 import tempfile
@@ -62,6 +63,8 @@ def cmd_watch(a):
         except OSError:
             url = f'http://127.0.0.1:{a.port}/'
             print(f'Lens is already running: opening its dashboard ({url}).', flush=True)
+            open_page(url, a)
+            return              # a second copy would record the phone twice and save every bug twice
         open_page(url, a)
     found = adb.devices()
     if not found:
@@ -138,7 +141,8 @@ def cmd_watch(a):
             f0 = ev.ts - FULL
             video.cut(segments_for(rec.segments(), f0, t1), f0, t1, folder / 'full.mp4', rates.window(f0 - 5, t1))
             has_clip = (folder / 'clip.mp4').exists()
-            bugs.update(folder, ev, now, tw, has_clip, t0, BEFORE + AFTER)   # lists full.mp4, and a comment typed meanwhile
+            saved = json.loads((folder / 'meta.json').read_text(encoding='utf-8'))   # write() moved the start if the video began late
+            bugs.update(folder, ev, now, tw, has_clip, saved.get('clip_start', t0), saved.get('clip_seconds', BEFORE + AFTER))   # lists full.mp4, and a comment typed meanwhile
             if not has_clip:
                 why = 'the phone\'s screen is off' if adb.screen_off(serial) else 'no video was arriving from the phone. Check the cable'
                 print(f'\n● Saved WITHOUT a clip: {why}.', flush=True)
@@ -155,6 +159,7 @@ def cmd_watch(a):
         if not e:
             return
         logs.add(e.ts + offset, e.raw)
+        seen.logged(e.ts + offset)
         if e.tag == 'ActivityTaskManager' and (act := freeze.started(e.msg)):
             with looking:
                 seen.opened(act, a.package)
@@ -389,6 +394,13 @@ def main(argv=None):
     u.add_argument('--no-open', action='store_true', help="don't open the browser")
     u.set_defaults(fn=cmd_ui)
     a = ap.parse_args(argv)
+    # Closing the terminal or a kill should clean up like Ctrl+C: else screenrecord keeps running on the phone
+    # and Show taps stays on.
+    def stop(*_):
+        raise KeyboardInterrupt
+    for name in ('SIGTERM', 'SIGHUP'):
+        if hasattr(signal, name):
+            signal.signal(getattr(signal, name), stop)
     a.fn(a)
 
 
