@@ -78,6 +78,8 @@ def snap(label, known):
     head = re.sub(r'[^A-Z0-9 ]', '', label).strip()
     odd = head != label.strip()
     for full, _ in sorted(known.items(), key=lambda kv: -kv[1]):
+        if re.sub(r'[^A-Z0-9 ]', '', full).strip() != full.strip():
+            continue                     # never snap to a misread ('DIVE' → 'DIVE(')
         a, b = label.upper(), full.upper()
         cut_off = len(b) > len(a) >= 3 and b.startswith(a) and len(b) - len(a) <= 3      # 'SWIT' → 'SWITCH'
         stray = len(a) == len(b) + 1 and a.endswith(b) and known[full] > known.get(label, 0)   # 'ISWITCH' → 'SWITCH'
@@ -85,7 +87,7 @@ def snap(label, known):
                            and known[full] > 2 * known.get(label, 0))
         if cut_off or stray or misread:
             return full
-    return label
+    return head if odd and len(head) >= 3 and head.isupper() else label    # no clean read to snap to: drop the junk ('DIVE(' → 'DIVE')
 
 
 def name(action, lines, known=None):

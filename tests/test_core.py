@@ -151,6 +151,8 @@ def test_label_snapping():
     # real, 23 Nov: a finger over the label gave 'JUř ×8, JUr ×9' beside 'JUMP ×19', and 'DIVE('
     seen = {'JUMP': 40, 'JUr': 3, 'JUř': 2, 'DIVE': 30, 'DIVE(': 2, 'cancel': 2}
     assert [describe.snap(l, seen) for l in ('JUr', 'JUř', 'DIVE(', 'cancel', 'JUMP')] == ['JUMP', 'JUMP', 'DIVE', 'cancel', 'JUMP']
+    assert describe.snap('DIVE(', {'DIVE(': 9}) == 'DIVE' and describe.snap('Thumb pad', {}) == 'Thumb pad'
+    assert describe.snap('DIVE', {'DIVE': 13, 'DIVE(': 1}) == 'DIVE'          # real, 23 Nov: it went the wrong way
     assert describe.label_at([('JUMP', 0.75, 0.68, 0.06, 0.04)], 0.79, 0.72) == 'JUMP'
     assert describe.label_at([('JUMP', 0.75, 0.68, 0.06, 0.04)], 0.2, 0.7) is None
 
