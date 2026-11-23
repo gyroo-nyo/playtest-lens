@@ -520,7 +520,7 @@ function drawCard(t) {
     const down = t > 12.3 && t < 12.4 ? 6 : 0, sent = t >= 12.36, y = 600 + (1 - p) * 18 + down;
     c.fillStyle = sent ? COL.ink : COL.blue; c.fillRect(792, y, 496, 112);
     c.fillStyle = '#fff'; c.font = `700 44px ${F.head}`; c.textAlign = 'center';
-    c.fillText(sent ? 'Sent ✓' : 'Send to Discord', 1040, y + 70); c.textAlign = 'left';
+    c.fillText(sent ? 'Copied ✓' : 'Copy for Discord', 1040, y + 70); c.textAlign = 'left';
   }
   c.strokeStyle = COL.ink; c.lineWidth = 4; c.strokeRect(2, 2, CARD.w - 4, CARD.h - 4);
 }
@@ -552,7 +552,7 @@ function drawCardWorld(t) {
     }
     return;
   }
-  drawCard(13.0);                                            // the sent card shrinks into the first line of the bug feed
+  drawCard(13.0);                                            // the copied card shrinks into the first line of the bug feed
   const p = ST(6, E.io)(seg(t, 13.0, 13.42));
   ctx.drawImage(cardCv, lerp(CARD.x, FX, p), lerp(CARD.y, FY, p), lerp(CARD.w, FW, p), lerp(CARD.h, FH, p));
 }
@@ -639,7 +639,7 @@ function drawReport(t) {
     c.fillText(typed(t, 'CPU 62 °C · battery 31 °C, 76%', 26.75, 26.95), 170, 456); }
   if (t > 26.9) { c.fillStyle = COL.ink; c.fillRect(32, 490, REP.w - 64, 136); c.font = `500 24px ${F.mono}`;
     LOG.forEach((l, i) => { c.fillStyle = i === 1 ? '#c9c9c4' : '#ff6b62'; c.fillText(l, 52, 532 + i * 38); }); }
-  [['Send to Discord', 1], ['GitHub issue', 0], ['Copy text', 0]].forEach(([label, primary], i) => {
+  [['Copy for Discord', 1], ['GitHub issue', 0], ['Copy text', 0]].forEach(([label, primary], i) => {
     const q = stepIn(t, 27.05 + i * .08, .2, 3); if (q <= 0) return;
     const x = 32 + i * 316, y = 656 + (1 - q) * 14;
     c.fillStyle = primary ? COL.blue : '#fff'; c.fillRect(x, y, 300, 72); c.strokeStyle = primary ? COL.blue : COL.ink; c.lineWidth = 3; c.strokeRect(x, y, 300, 72);
@@ -849,7 +849,7 @@ function render(t) {
   word(t, 'wait, what?', 1150, 250, 104, 3.4, 4.5);
   word(t, 'too late?', 960, 930, 124, 5.95, 6.6, { align: 'center' });
   word(t, 'Lens was already recording', 960, 1012, 78, 7.1, 8.35, { align: 'center' });
-  word(t, 'sent with the clip', 960, 150, 80, 12.78, 13.35, { align: 'center' });
+  word(t, 'copied, clip and all', 960, 150, 80, 12.78, 13.35, { align: 'center' });
   word(t, 'and it catches bugs by itself', 960, 210, 84, 13.75, 14.95, { align: 'center' });
   word(t, 'the report comes filled in', 960, 140, 80, 25.45, 26.95, { align: 'center' });
   banner(t, 27.85, 28.5, [['● New build  v1.4.3 b32', '#f4f4f1']], 60);

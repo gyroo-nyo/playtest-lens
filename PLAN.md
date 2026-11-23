@@ -146,22 +146,9 @@ crashes, listens for the F8 mark, and writes one folder per bug.
 - **Done when** (still to check on the phone): a catch shows up in the feed live, and goes to a GitHub issue
   in under 30 s.
 
-## Skills used on this project
-
-| Skill | Where |
-|---|---|
-| ponytail | every coding task: smallest complete change, one check per new logic |
-| design-md-planner | DESIGN.md (Flight Recorder), linted clean with the official CLI |
-| ui-ux-pro-max | UX rules for the dashboard (focus, reduced motion, live regions, loading), phase 3 |
-| impeccable / frontend-design | building and polishing the dashboard, phase 3 |
-| engineering:testing-strategy | detector fixtures and accuracy numbers, phases 2–3 |
-| code-review | before each push |
-| bang-motion / hyperframes | the README demo video, phase 6 |
-
 ## Rules
 
 - $0 to run; on-device models only. Anything paid is optional and off by default.
 - Nothing leaves the machine except reports the user exports.
 - **Public demos use an open-source Android game**, never footage of games under a tester NDA.
 - Logic lives in the core package with tests; the dashboard only displays it.
-- No AI co-author or contributor lines in commits.

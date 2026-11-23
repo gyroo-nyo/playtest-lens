@@ -1,8 +1,10 @@
 # Playtest Lens
 
+![Playtest Lens in 40 seconds](docs/ident/lens-ident-40s-small.gif)
+
 **A dashcam for game testers.** Plug in an Android phone and play. Playtest Lens keeps the last 30 seconds of screen, touches and logs, catches crashes and "app not responding" on its own, and lets you mark anything else with one key. Every bug becomes a folder with a clip, the logs, your touches and a report you can paste into Jira or GitHub. Everything runs on your computer, free.
 
-> Status: phases 1–3 of 6 built (recording, five detectors, reports, the dashboard). See [PLAN.md](PLAN.md).
+> Status: phases 1–4 of 6 built (recording, the detectors, reports, the dashboard, health, seen-again and build checks). Full video with sound: [docs/ident/lens-ident-40s-phone.mp4](docs/ident/lens-ident-40s-phone.mp4). See [PLAN.md](PLAN.md).
 
 ## Try it
 
@@ -40,7 +42,7 @@ Each bug lands in `bugs/<time>_<kind>/`: `clip.mp4` (15 s, with your taps shown)
 .venv/bin/pip install -e ".[dev]" && .venv/bin/pytest
 ```
 
-The tests use recorded crash dumps and touch streams, so no phone is needed. Design system: [DESIGN.md](DESIGN.md).
+The tests use recorded crash dumps and touch streams, so no phone is needed.
 
 ## License
 
