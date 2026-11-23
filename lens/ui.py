@@ -22,7 +22,7 @@ from . import bugs, checks, discord
 PAGE = Path(__file__).parent / 'web' / 'index.html'
 FONTS = Path(__file__).parent / 'web' / 'fonts'
 FILES = {'clip.mp4', 'full.mp4', 'moment.jpg', 'circled.jpg', 'circles.json'}
-PUBLIC = ('github_repo', 'package', 'discord_details')   # settings the page may see; the Discord webhook is a secret
+PUBLIC = ('github_repo', 'package', 'discord_details')   # settings the page may see
 PORT = 8737
 CHECKS = threading.Lock()      # the page can send two clicks at once: one read-modify-write of .checks.json at a time
 
@@ -103,7 +103,7 @@ function run(a) {
 
 def public(root):
     s = settings(root)
-    return {**{k: s[k] for k in PUBLIC if k in s}, 'discord': bool(s.get('discord_webhook'))}
+    return {k: s[k] for k in PUBLIC if k in s}
 
 
 def save_settings(root, **changes):
@@ -155,7 +155,6 @@ def detail(root, bug_id):
         'report': read('report.md') or '', 'edited': (folder / 'report.edited.md').exists(),
         'describe': json.loads(read('describe.json') or 'null'), 'ai': json.loads(read('ai.json') or 'null'),
         'files': sorted(n for n in FILES if (folder / n).exists()),
-        'discord': json.loads(read('discord.json') or 'null'),
         'bug_at': round(ev_ts - t0, 2) if ev_ts and t0 is not None else None, 'taps': taps,
         'log': [{'text': l, 'hit': any(x and x in l for x in matched)} for l in log],
         'game_log': [{'text': l, 'hit': any(x and x in l for x in matched)} for l in game_log],
@@ -280,11 +279,6 @@ class Handler(BaseHTTPRequestHandler):
                 if repo and not re.fullmatch(r'[\w.-]+/[\w.-]+', repo):
                     return self.send(400, {'error': 'Use owner/repo, e.g. superfusion/gfl-bugs'})
                 changes['github_repo'] = repo
-            if 'discord_webhook' in body:
-                hook = str(body['discord_webhook']).strip()
-                if hook and not discord.valid(hook):
-                    return self.send(400, {'error': 'That isn\'t a Discord webhook link. In Discord: channel settings → Integrations → Webhooks → Copy Webhook URL.'})
-                changes['discord_webhook'] = hook
             save_settings(self.root, **changes)
             return self.send(200, public(self.root))
         if path == '/api/checks':
@@ -326,7 +320,7 @@ class Handler(BaseHTTPRequestHandler):
             n_false = sum(1 for f in found if f.parent.name == bugs.FALSE)
             return self.send(200, {'bugs': len(found) - n_false, 'false_alarms': n_false,
                                    'mb': round(sum(x.stat().st_size for f in found if f.exists() for x in f.iterdir() if x.is_file()) / 1048576)})
-        m = re.fullmatch(r'/api/bug/([^/]+)/(report|note|dismiss|restore|rebuild|ai|export|discord|discord-text|discord-clip|circled)', path)
+        m = re.fullmatch(r'/api/bug/([^/]+)/(report|note|dismiss|restore|rebuild|ai|export|discord-text|discord-clip|circled)', path)
         if not m:
             return self.send(404, {'error': 'not found'})
         bug_id, action = urllib.parse.unquote(m.group(1)), m.group(2)
@@ -382,18 +376,10 @@ class Handler(BaseHTTPRequestHandler):
             if body.get('copy'):
                 circled = folder / 'circled.jpg'           # the tester's circled picture goes along with the clip
                 if not copy_file(clip, *([circled] if circled.exists() else [])):
-                    return self.send(500, {'error': 'Couldn\'t put the clip on the clipboard. Use Send to Discord, Copy text to find it in Finder.'})
+                    return self.send(500, {'error': 'Couldn\'t put the clip on the clipboard. Use Copy for Discord → Copy text: Finder shows the clip to drag in.'})
             elif body.get('reveal', True):
                 reveal(clip)
             return self.send(200, {'file': clip.name, 'mb': round(clip.stat().st_size / 1048576, 1), 'picture': body.get('copy') and (folder / 'circled.jpg').exists()})
-        elif action == 'discord':
-            hook = settings(self.root).get('discord_webhook')
-            if not hook:
-                return self.send(409, {'error': 'Paste the channel\'s Discord webhook link first.'})
-            try:
-                discord.send(hook, bugs.find(self.root, bug_id), details=bool(settings(self.root).get('discord_details')))
-            except ValueError as e:
-                return self.send(502, {'error': str(e)})
         elif action == 'export':
             repo = settings(self.root).get('github_repo')
             url = issue_url(repo, (bugs.find(self.root, bug_id) / 'report.md').read_text(encoding='utf-8'))

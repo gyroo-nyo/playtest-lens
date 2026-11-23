@@ -47,7 +47,7 @@ Written by a local model (Ollama) from: your note, the touch log mapped to on-sc
 the log lines around the moment, device + game version.
 
 - Title, severity guess, steps to reproduce, expected vs actual, environment, attachments (clip, logs)
-- Export: Discord (a channel webhook, the tester presses Send after a preview; the clip re-encoded under 10 MB), Markdown, GitHub issue (prefilled page); Jira later
+- Export: copy for Discord (the message and the clip, pasted by the tester; Lens never posts), Markdown, GitHub issue (prefilled page); Jira later
 - You edit it before export; nothing is sent anywhere unless you export it
 
 ## Replay
@@ -87,13 +87,14 @@ Touches are recorded from `adb shell getevent` with timestamps and replayed with
   ends background games all the time. (`rms_NormalReclaimer: doFastKill ... package: superfusion.gfl` looked like a kill
   but is memory freed *for* GFL as it opens.)
 - **Done (22 Nov):** game closed, phone health, regression checks (Checks tab; a fail is a bug with its clip, ▶ Clip in
-  the table), circle the problem (`circled.jpg` beside `moment.jpg`, sent to Discord), seen again (crash, ANR, text and
+  the table), circle the problem (`circled.jpg` beside `moment.jpg`, copied with the clip), seen again (crash, ANR, text and
   game-closed bugs with the same error, numbers ignored: `×N` in the feed, "Seen before" in the report), and a clean
   scoreboard (only the down, clock and score OCR recognises; junk dropped) plus the play called (PREVENT / PRESSURE /
   BLITZ on defense, team + number like CHICAGO 2 on offense) as step 1 of the report.
 - **Virtual touchscreen verified (23 Nov):** `uinput` registered a touchscreen (bus virtual) and GFL got the tap
   (ACTION_DOWN/UP); it takes the same raw portrait coordinates Lens records from `getevent`, so recorded taps can be replayed as they are.
-- **Left:** menu checks replayed through the virtual touchscreen (now only the feature itself)
+- **Not built:** menu replay. Gameplay never repeats, so replayed taps don't bring gameplay bugs back, and the checks are
+  gameplay checks; playing a check by hand and marking pass/fail (a fail saves a clip) covers it.
   and a repro rate (the Checks table already shows pass/fail per build).
 - **Keep it simple:** every addition has to earn its place on the page; no new settings.
 
@@ -138,7 +139,7 @@ crashes, listens for the F8 mark, and writes one folder per bug.
 - **Bug:** what was on screen and what was pressed; Clip (15 s clip or the 30 s before, a scrubber with
   tap ticks and the bug in orange, the picture at the bug), Report (editable Markdown; edits survive a
   rebuild, and an AI draft asks before replacing them), Log (matched lines marked).
-- **Actions:** Send to Discord (preview dialog, webhook kept in the gitignored `bugs/.lens.json` and never sent to the page), Open GitHub issue (a prefilled new-issue page on the repo you set; nothing is posted, clips are
+- **Actions:** Copy for Discord (preview, then copy the text and the clip to paste by hand; sending through a webhook was removed 23 Nov: group DMs can't have one), Open GitHub issue (a prefilled new-issue page on the repo you set; nothing is posted, clips are
   attached by hand), Copy Markdown, False alarm. Each manual bug has a "What went wrong" box: that text is the Discord message and the title.
 - **Safety:** 127.0.0.1 only, and only requests addressed to it (no DNS rebinding); files only from inside `bugs/`; POSTs need the page's `X-Lens` header; HTTP
   Range so Safari plays clips.

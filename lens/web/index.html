@@ -155,7 +155,7 @@
   .listhead .note { margin-left: auto; font: 500 12px/1 var(--mono); color: var(--grey); white-space: nowrap; }
   .feed { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; min-height: 0; }
   .feed:focus-visible { outline-offset: -2px; }
-  .row { display: grid; grid-template-columns: 6px 64px 76px minmax(0, 1fr) minmax(0, .75fr) 52px 18px; align-items: center; gap: 14px; height: 42px; padding: 0 24px 0 12px;
+  .row { display: grid; grid-template-columns: 6px 64px 76px minmax(0, 1fr) minmax(0, .75fr) 52px; align-items: center; gap: 14px; height: 42px; padding: 0 24px 0 12px;
          border-bottom: 1px solid var(--hair); cursor: pointer; transition: background-color 120ms ease-out; }
   .row:hover { background: #EAEAE4; }
   .row:active { background: #DDDDD7; }
@@ -259,7 +259,6 @@
   .act.quiet kbd { border-color: #8A8A85; color: var(--grey); background: transparent; }
   .act.quiet:hover { border-color: var(--error); color: var(--error); background: var(--error-bg); }
   .act.quiet:hover kbd { border-color: var(--error); color: var(--error); background: transparent; }
-  .act.sent { border-color: var(--normal); }
   .send:active, .act:active, .pill:active, .ftab:active, .view:active, .iconbtn:active, .markbtn:active:not(:disabled), .btn:active:not(:disabled),
   .pressed { transform: scale(.95); transition: transform 70ms ease-out; }
 
@@ -364,7 +363,7 @@
   @media (max-width: 640px) {
     .band { gap: 10px; padding: 0 12px; } .brand b { display: none; } .rec, .markbtn kbd { display: none; } .ftab { padding: 8px; }
     .markbtn { padding: 0 14px; } .rail, .split .media, .split .info { padding: 16px; } .listhead, .dhead { padding: 0 16px; }
-    .row { grid-template-columns: 6px 64px minmax(0, 1fr) 44px; padding: 0 12px 0 8px; } .row .chip, .row .sent { display: none; }
+    .row { grid-template-columns: 6px 64px minmax(0, 1fr) 44px; padding: 0 12px 0 8px; } .row .chip { display: none; }
     .view kbd, .filters { display: none; } .status .where { display: none; }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -427,7 +426,7 @@
     <section class="tally" aria-label="Today">
       <div><b id="bigBugs">0</b><span>bugs</span></div>
       <div><b id="bigCaught">0</b><span>caught by Lens</span></div>
-      <div><b id="bigSent">0</b><span>sent</span></div>
+      <div><b id="bigMarked">0</b><span>marked by you</span></div>
     </section>
 
     <dl class="keys" aria-label="Keyboard shortcuts">
@@ -463,7 +462,6 @@
           <button class="pill" role="tab" data-filter="all" aria-selected="true">All</button>
           <button class="pill" role="tab" data-filter="caught" aria-selected="false">Caught<span class="c" id="cCaught"></span></button>
           <button class="pill" role="tab" data-filter="marked" aria-selected="false">Marked<span class="c" id="cMarked"></span></button>
-          <button class="pill" role="tab" data-filter="unsent" aria-selected="false">Not sent<span class="c" id="cUnsent"></span></button>
         </div>
         <span class="note">newest first</span>
         <button class="btn slim" id="cleanBtn" title="Move old bugs to the Trash">Delete old…</button>
@@ -490,22 +488,15 @@
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 
 <dialog id="discordDlg" aria-labelledby="discordTitle">
-  <header><span class="label" id="discordTitle">SEND TO DISCORD</span></header>
+  <header><span class="label" id="discordTitle">COPY FOR DISCORD</span></header>
   <div class="body">
     <pre class="preview" id="discordPreview"></pre>
     <label class="check"><input type="checkbox" id="dDetails"> Add details: what was on screen, buttons pressed, device and build</label>
     <p class="attach" id="discordAttach"></p>
-    <div class="field-group" id="hookGroup" hidden>
-      <label for="hookInput">Channel webhook link</label>
-      <input class="field" id="hookInput" type="password" autocomplete="off" placeholder="https://discord.com/api/webhooks/…" aria-describedby="hookHelp hookErr">
-      <p class="help" id="hookHelp">In Discord: channel settings → Integrations → Webhooks → New Webhook → Copy Webhook URL. Saved on this Mac only.</p>
-      <p class="err" id="hookErr" hidden></p>
-    </div>
   </div>
   <footer>
     <button class="btn" id="dCancel">Cancel</button>
-    <button class="btn" id="dCopy">Copy text</button>
-    <button class="btn primary" id="dSend">Send to channel</button>
+    <button class="btn primary" id="dCopy">Copy text</button>
   </footer>
 </dialog>
 
@@ -540,14 +531,8 @@
 </dialog>
 
 <dialog id="settingsDlg" aria-labelledby="settingsTitle">
-  <header><span class="label" id="settingsTitle">WHERE REPORTS GO</span></header>
+  <header><span class="label" id="settingsTitle">GITHUB</span></header>
   <form class="body" id="settingsForm" method="dialog">
-    <div class="field-group">
-      <label for="sHook">Discord channel webhook</label>
-      <input class="field" id="sHook" type="password" autocomplete="off" placeholder="https://discord.com/api/webhooks/…" aria-describedby="sHookHelp sHookErr">
-      <p class="help" id="sHookHelp">Channel settings → Integrations → Webhooks → Copy Webhook URL. Kept on this Mac; leave empty to keep the saved one.</p>
-      <p class="err" id="sHookErr" hidden></p>
-    </div>
     <div class="field-group">
       <label for="sRepo">GitHub repo (optional)</label>
       <input class="field" id="sRepo" autocomplete="off" placeholder="owner/repo" aria-describedby="sRepoHelp sRepoErr">
@@ -556,7 +541,6 @@
     </div>
   </form>
   <footer>
-    <button class="btn" id="sForget" hidden>Forget webhook</button>
     <button class="btn" id="sCancel">Cancel</button>
     <button class="btn primary" id="sSave">Save</button>
   </footer>
@@ -647,7 +631,7 @@ function renderLive() {
   drawBars(L);
 }
 
-const FILTERS = {all: () => true, caught: b => b.kind !== 'manual', marked: b => b.kind === 'manual', unsent: b => !b.sent};
+const FILTERS = {all: () => true, caught: b => b.kind !== 'manual', marked: b => b.kind === 'manual'};
 function rows() { return state ? (list === 'bugs' ? state.bugs : state.false_alarms).filter(FILTERS[filter]) : []; }
 
 function renderFeed() {
@@ -656,10 +640,9 @@ function renderFeed() {
   $('#nFalse').textContent = state.false_alarms.length;
   const caught = state.bugs.filter(FILTERS.caught).length;
   $('#bigCaught').textContent = caught; $('#bigCaught').classList.toggle('some', caught > 0);
-  $('#bigSent').textContent = state.bugs.filter(b => b.sent).length;
+  $('#bigMarked').textContent = state.bugs.filter(FILTERS.marked).length;
   $('#cCaught').textContent = all.filter(FILTERS.caught).length;
   $('#cMarked').textContent = all.filter(FILTERS.marked).length;
-  $('#cUnsent').textContent = all.filter(FILTERS.unsent).length;
   $('#listTitle').textContent = list === 'bugs' ? 'Bugs' : 'False alarms';
   const inList = $('#checksView').hidden;
   $('#tabBugs').setAttribute('aria-selected', inList && list === 'bugs'); $('#tabFalse').setAttribute('aria-selected', inList && list === 'false');
@@ -680,7 +663,6 @@ function renderFeed() {
       <span class="title">${b.seen > 1 ? `<b class="times" title="Saved ${b.seen} times with the same error">×${b.seen}</b> ` : ''}${esc(b.title || 'Marked by tester')}</span>
       <span class="ctx">${esc(b.situation || b.summary || '')}</span>
       <span class="len ${b.clip ? '' : 'nil'}">${b.clip ? (b.clip_seconds ? Math.round(b.clip_seconds) + ' s' : 'clip') : 'no clip'}</span>
-      <span class="sent">${b.sent ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#3340FF" stroke-width="2" role="img" aria-label="Sent to Discord"><path d="M3 8.5l3 3 7-7"/></svg>' : ''}</span>
     </li>`).join('');
 }
 
@@ -711,7 +693,7 @@ const picUrl = () => `/files/${encodeURIComponent(bug.id)}/${bug.files.includes(
 function picRow() {
   if (!bug.files.includes('moment.jpg')) return '';
   return bug.files.includes('circled.jpg')
-    ? `<div class="picrow"><img src="${picUrl()}" alt="Your circled picture"><span class="help">Circled: this picture goes with the bug to Discord and the report.</span>
+    ? `<div class="picrow"><img src="${picUrl()}" alt="Your circled picture"><span class="help">Circled: this picture goes in the bug’s report.</span>
        <button class="btn slim" id="aCircle">Redraw</button><button class="btn slim" id="aUncircle">Remove circles</button></div>`
     : `<div class="picrow"><button class="btn slim" id="aCircle" title="Draw a circle on the picture of the moment, so the devs see where to look">Circle the problem</button></div>`;
 }
@@ -771,7 +753,7 @@ async function openCircle() {
     const jpeg = out.toDataURL('image/jpeg', 0.9).split(',')[1];
     const r = await post(`/api/bug/${encodeURIComponent(bug.id)}/circled`, {jpeg, circles});
     if (!r.ok) return msg('Couldn’t save the picture.', true);
-    $('#circleDlg').close(); bug = await r.json(); picVer++; renderDetail(); msg('Saved. The circled picture goes with this bug to Discord and the report.');
+    $('#circleDlg').close(); bug = await r.json(); picVer++; renderDetail(); msg('Saved. The circled picture goes in this bug’s report.');
   };
   $('#circleDlg').showModal();
 }
@@ -793,7 +775,6 @@ function renderDetail() {
       ${d.situation ? `<dt>On screen</dt><dd>${esc(d.situation)}</dd>` : ''}
       ${d.summary ? `<dt>Pressed</dt><dd>${esc(d.summary)}</dd>` : ''}
       <dt>Device</dt><dd>${esc(m.model)} · Android ${esc(m.android)} · ${esc(m.game_version)}</dd>
-      ${bug.discord ? `<dt>Discord</dt><dd class="saved">Sent ${esc(bug.discord.sent)}</dd>` : ''}
     </dl>
     ${m.kind === 'manual' ? `<div class="note-box">
       <label for="noteInput">What went wrong</label>
@@ -802,7 +783,7 @@ function renderDetail() {
       <p class="help" id="noteHelp">${words < 3 ? 'Say it the way you would on Discord: this is the message and the bug’s title.' : 'This is the Discord message and the bug’s title.'}</p>
     </div>` : ''}
     <div class="actions">
-      <button class="send" id="aDiscord" title="Preview and send to the Discord channel (D)">${bug.discord ? 'Send again' : 'Send to Discord'} <kbd>D</kbd></button>
+      <button class="send" id="aDiscord" title="Preview the message and copy it to paste in Discord (D)">Copy for Discord <kbd>D</kbd></button>
       <div class="grid">
         ${has(clipName) ? `<button class="act" id="aClip" title="Copy the ${clipName === 'full.mp4' ? '30 s' : '15 s'} video, then paste it in Discord with ⌘V (V)">Copy clip <kbd>V</kbd></button>` : ''}
         <button class="act" id="aCopy" title="Copy the report as Markdown (C)">Copy text <kbd>C</kbd></button>
@@ -977,7 +958,7 @@ async function copyClip() {
 async function exportIssue() {
   let res = await post(`/api/bug/${encodeURIComponent(bug.id)}/export`);
   if (res.status === 409) {
-    if (!await openSettings('sRepo')) return;
+    if (!await openSettings()) return;
     res = await post(`/api/bug/${encodeURIComponent(bug.id)}/export`);
   }
   const out = await res.json();
@@ -1037,27 +1018,8 @@ async function openDiscord() {
   $('#dDetails').checked = !!state.settings.discord_details;
   if (!await discordText()) return msg('Couldn’t build the message.', true);
   showAttach();
-  $('#hookGroup').hidden = state.settings.discord; $('#hookErr').hidden = true; $('#hookInput').value = '';
-  $('#dSend').disabled = false; $('#dSend').textContent = bug.discord ? 'Send again' : 'Send to channel';
   $('#discordDlg').showModal();
-  (state.settings.discord ? $('#dSend') : $('#hookInput')).focus();
-}
-
-async function sendDiscord() {
-  const btn = $('#dSend');
-  if (!state.settings.discord) {
-    const hook = $('#hookInput').value.trim();
-    const s = await post('/api/settings', {discord_webhook: hook});
-    const out = await s.json();
-    if (!s.ok || !hook) { $('#hookErr').textContent = hook ? out.error : 'Paste the webhook link first.'; $('#hookErr').hidden = false; $('#hookInput').focus(); return; }
-    state.settings = out;
-  }
-  btn.disabled = true; btn.setAttribute('aria-busy', 'true'); btn.textContent = 'Sending…';
-  const res = await post(`/api/bug/${encodeURIComponent(bug.id)}/discord`);
-  const out = await res.json();
-  btn.removeAttribute('aria-busy');
-  if (!res.ok) { btn.disabled = false; btn.textContent = 'Try again'; return msg(out.error, true); }
-  $('#discordDlg').close(); bug = out; await refresh(); renderDetail(); msg('Sent to Discord.');
+  $('#dCopy').focus();
 }
 
 async function openClean() {
@@ -1135,28 +1097,23 @@ function renderChecks() {
   }).join('') : '<tr><td class="none" style="border:0;padding:0">No checks yet. Add the things to re-test on every build, or press “Add to checks” on a bug.</td></tr>';
 }
 
-function openSettings(focusId) {
+function openSettings() {
   return new Promise(done => {
     const d = $('#settingsDlg');
-    $('#sHook').value = ''; $('#sRepo').value = state.settings.github_repo || '';
-    $('#sHook').placeholder = state.settings.discord ? 'Saved. Paste a new link to replace it.' : 'https://discord.com/api/webhooks/…';
-    $('#sForget').hidden = !state.settings.discord;
-    ['#sHookErr', '#sRepoErr'].forEach(e => $(e).hidden = true);
+    $('#sRepo').value = state.settings.github_repo || '';
+    $('#sRepoErr').hidden = true;
     const finish = ok => { d.close(); done(ok); };
     $('#sCancel').onclick = () => finish(false);
     d.oncancel = () => done(false);
-    $('#sForget').onclick = async () => { const r = await post('/api/settings', {discord_webhook: ''}); state.settings = await r.json(); msg('Webhook forgotten.'); finish(false); };
     $('#sSave').onclick = async () => {
       const body = {github_repo: $('#sRepo').value.trim()};
-      if ($('#sHook').value.trim()) body.discord_webhook = $('#sHook').value.trim();
       const r = await post('/api/settings', body); const out = await r.json();
       if (!r.ok) {
-        const which = body.discord_webhook && /Discord/.test(out.error) ? 'sHook' : 'sRepo';
-        $('#' + which + 'Err').textContent = out.error; $('#' + which + 'Err').hidden = false; $('#' + which).focus(); return;
+        $('#sRepoErr').textContent = out.error; $('#sRepoErr').hidden = false; $('#sRepo').focus(); return;
       }
       state.settings = out; status(state); msg('Saved.'); finish(true);
     };
-    d.showModal(); $('#' + (focusId || 'sHook')).focus();
+    d.showModal(); $('#sRepo').focus();
   });
 }
 
@@ -1170,7 +1127,7 @@ function status(s, down) {
     ${L ? `<span class="${!L.connected ? 'bad' : L.video ? 'ok' : 'warn'}">${!L.connected ? 'Phone disconnected' : L.video ? 'Phone connected' : 'No video from the phone: marks won’t have clips'}</span>
            <span>${esc(L.package)} ${esc(L.version)}</span><span>buffer 30 s</span>`
         : `<span>Not recording</span><span>${s.bugs.length} bugs on disk</span>`}
-    <span>Discord: ${s.settings.discord ? 'set' : 'not set'}${s.settings.github_repo ? ' · GitHub ' + esc(s.settings.github_repo) : ''}</span>
+    ${s.settings.github_repo ? `<span>GitHub ${esc(s.settings.github_repo)}</span>` : ''}
     <span class="where">bugs saved in ~/playtest-lens/bugs</span>`;
 }
 
@@ -1233,15 +1190,14 @@ $('#openSettings').onclick = () => openSettings();
 $('#markNote').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitMark(); } });
 $('#dCancel').onclick = () => $('#discordDlg').close();
 $('#dDetails').onchange = e => { discordText(e.target.checked); showAttach(); };
-$('#dSend').onclick = sendDiscord;
-$('#hookInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendDiscord(); });
 $('#dCopy').onclick = async () => {
   try { await navigator.clipboard.writeText($('#discordPreview').textContent); }
   catch { return msg('Couldn’t reach the clipboard. Select the text and copy it.', true); }
-  if (!bug.files.includes('clip.mp4')) return msg('Copied. Paste it in Discord.');
+  if (!bug.files.includes('clip.mp4')) { $('#discordDlg').close(); return msg('Copied. Paste it in Discord.'); }
   msg('Copied. Making a clip small enough for Discord…');
   const r = await post(`/api/bug/${encodeURIComponent(bug.id)}/discord-clip`, {reveal: true});
   const out = await r.json();
+  $('#discordDlg').close();
   msg(r.ok ? `Finder is showing ${out.file} (${out.mb} MB, under Discord’s 20 MB): paste the text in Discord and drag it in.` : out.error, !r.ok);
 };
 

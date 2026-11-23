@@ -467,7 +467,7 @@ def test_simple_command(monkeypatch, tmp_path):
     assert cli.simple(['--port', '8738']) == ['watch', 'superfusion.gfl', '--port', '8738']
 
 
-def test_discord_message_and_send(tmp_path):
+def test_discord_message_and_clip(tmp_path):
     from lens import discord, ui
     meta = {'model': 'Infinix X6870', 'android': '16', 'package': PKG, 'game_version': '1.2', 'serial': 'X'}
     folder = bugs.write(tmp_path, Event('manual', 1763561000.0, note='Kicker freezes mid-kick'), meta, [], [], lambda out: False)
@@ -475,17 +475,6 @@ def test_discord_message_and_send(tmp_path):
     assert discord.message(folder) == 'Kicker freezes mid-kick'           # the way GFL bugs go out: the explanation
     text = discord.message(folder, details=True)
     assert text.startswith('**[') and 'Kicker freezes mid-kick' in text and 'SECOND DOWN AND 11' in text and len(text) <= 2000
-    (folder / 'moment.jpg').write_bytes(b'\xff\xd8jpeg')
-    hook = 'https://discord.com/api/webhooks/123/abc-DEF_9'
-    assert discord.valid(hook) and not discord.valid('https://evil.example/api/webhooks/1/x')
-    sent = []
-    out = discord.send(hook, folder, lambda url, body, kind: sent.append((url, body, kind)) or (200, b'{}'))
-    url, body, kind = sent[0]
-    assert url == hook + '?wait=true' and kind.startswith('multipart/form-data') and b'Kicker freezes' in body and b'moment.jpg' in body
-    assert out['files'] == ['moment.jpg'] and (folder / 'discord.json').exists()
-    import pytest
-    with pytest.raises(ValueError):
-        discord.send(hook, folder, lambda *a: (404, b''))
     import shutil, subprocess as sp
     if shutil.which('ffmpeg'):                                         # the clip made small for pasting by hand
         sp.run(['ffmpeg', '-nostdin', '-loglevel', 'fatal', '-f', 'lavfi', '-i', 'testsrc=size=1920x1080:rate=30:duration=1',
@@ -497,8 +486,8 @@ def test_discord_message_and_send(tmp_path):
         assert small.name == 'discord.mp4' and small.stat().st_size < discord.LIMIT
         (folder / 'full.mp4').write_bytes((folder / 'clip.mp4').read_bytes())
         assert discord.small_clip(folder, 'full.mp4').name == 'full.mp4'  # the 30 s before, not the 15 s clip
-    ui.save_settings(tmp_path, discord_webhook=hook)
-    assert ui.public(tmp_path) == {'discord': True}                    # the page never sees the webhook
+    ui.save_settings(tmp_path, github_repo='a/b', discord_webhook='https://discord.com/api/webhooks/1/x')   # an old setting
+    assert ui.public(tmp_path) == {'github_repo': 'a/b'}                # the page sees only what it needs
 
 
 def test_ocr_reader_per_os(monkeypatch):
@@ -772,7 +761,6 @@ def test_regression_checks(tmp_path):
 
 
 def test_circled_picture_goes_with_the_bug(tmp_path):
-    from lens import discord
     meta = {'model': 'X', 'android': '16', 'package': PKG, 'game_version': '1', 'serial': 'X'}
     folder = bugs.write(tmp_path, Event('manual', 1763561000.0, note='kicker stuck'), meta, [], [], lambda out: False)
     (folder / 'moment.jpg').write_bytes(b'\xff\xd8\xffplain')
@@ -780,9 +768,6 @@ def test_circled_picture_goes_with_the_bug(tmp_path):
     assert json.loads((folder / 'circles.json').read_text())[0]['x2'] == 30      # Redraw can move them later
     assert (folder / 'moment.jpg').read_bytes() == b'\xff\xd8\xffplain'         # the original stays
     assert '](circled.jpg)' in (folder / 'report.md').read_text()
-    sent = []
-    discord.send('https://discord.com/api/webhooks/1/abc', folder, post=lambda u, b, k: sent.append(b) or (200, '{}'))
-    assert b'circled' in sent[0]
     bugs.set_circled(tmp_path, folder.name, None)
     assert not (folder / 'circles.json').exists() and not (folder / 'circled.jpg').exists() and '](moment.jpg)' in (folder / 'report.md').read_text()
 

@@ -225,7 +225,7 @@ def listing(root):
         desc = json.loads(d.read_text(encoding='utf-8')) if d.exists() else {}
         return {'id': folder.name, 'kind': m.get('kind', 'manual'), 'sig': signature(m.get('kind'), m.get('title', '')), 'time': m.get('time', ''), 'title': m.get('title', ''),
                 'note': m.get('note') or '', 'clip': (folder / 'clip.mp4').exists(), 'full': (folder / 'full.mp4').exists(),
-                'clip_seconds': m.get('clip_seconds'), 'sent': (folder / 'discord.json').exists(), 'situation': desc.get('situation', ''), 'summary': desc.get('summary', '')}
+                'clip_seconds': m.get('clip_seconds'), 'situation': desc.get('situation', ''), 'summary': desc.get('summary', '')}
 
     def rows(where):
         found = [row(f) for f in where.iterdir() if f.is_dir() and not f.name.startswith(('_', '.'))] if where.exists() else []
